@@ -1,0 +1,12 @@
+foldseek_path: foldseek
+
+databases:
+  afdb50: /data/foldseek/afdb50
+  pdb: /data/foldseek/pdb
+
+tmp_dir: ./tmp
+result_dir: ./results
+
+search:
+  max_seqs: 100
+  evalue: 1e-3
