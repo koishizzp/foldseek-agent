@@ -10,3 +10,4 @@ result_dir: ./results
 search:
   max_seqs: 100
   evalue: 1e-3
+  timeout_seconds: 600
