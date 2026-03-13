@@ -128,6 +128,7 @@ class Settings:
     foldseek_path: str = "foldseek"
     tmp_dir: str = "./tmp"
     result_dir: str = "./results"
+    upload_dir: str = "./uploads"
     default_database: str = "afdb50"
     databases: dict[str, str] = field(default_factory=dict)
     extra_config: dict[str, Any] = field(default_factory=dict)
@@ -197,6 +198,12 @@ class Settings:
                 base_dir=config_dir,
             )
             or defaults.result_dir,
+            upload_dir=_resolve_path(
+                _env_get(data, "FOLDSEEK_AGENT_UPLOAD_DIR", yaml_config.get("upload_dir", defaults.upload_dir)),
+                root=foldseek_root,
+                base_dir=config_dir,
+            )
+            or defaults.upload_dir,
             default_database=_env_get(
                 data,
                 "FOLDSEEK_AGENT_DEFAULT_DATABASE",
@@ -238,6 +245,7 @@ class Settings:
             "databases": self.databases,
             "tmp_dir": self.tmp_dir,
             "result_dir": self.result_dir,
+            "upload_dir": self.upload_dir,
             "default_database": self.default_database,
             "search": {
                 "max_seqs": self.search_max_seqs,

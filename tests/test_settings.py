@@ -33,6 +33,7 @@ def test_settings_from_env_resolves_paths_and_openai_aliases(monkeypatch, tmp_pa
     assert settings.openai_api_key == "test-key"
     assert settings.databases["afdb50"] == str(Path(tmp_path / "foldseek-root" / "db" / "afdb50"))
     assert settings.tmp_dir == str(Path(tmp_path / "foldseek-root" / "tmp"))
+    assert settings.upload_dir == str(Path(tmp_path / "foldseek-root" / "uploads"))
     assert settings.search_max_seqs == 50
     assert settings.search_timeout_seconds == 30
     assert settings.to_agent_config()["cluster"]["timeout_seconds"] == 120

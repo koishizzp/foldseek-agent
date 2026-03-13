@@ -4,9 +4,12 @@ from __future__ import annotations
 from functools import lru_cache
 import logging
 from pathlib import Path
+import re
+from secrets import token_hex
+import shutil
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
@@ -25,7 +28,8 @@ from agent.settings import get_settings
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger(__name__)
-app = FastAPI(title="Foldseek Agent", version="1.2.0")
+app = FastAPI(title="Foldseek Agent", version="1.3.0")
+SAFE_FILENAME_PATTERN = re.compile(r"[^A-Za-z0-9._-]+")
 
 
 @lru_cache(maxsize=1)
@@ -126,6 +130,45 @@ def get_result_reasoner() -> ResultReasoner:
     return ResultReasoner(get_settings())
 
 
+def get_upload_dir() -> Path:
+    settings = get_settings()
+    path = Path(settings.upload_dir)
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def _safe_upload_name(filename: str | None) -> str:
+    raw = Path(filename or "upload.bin").name
+    sanitized = SAFE_FILENAME_PATTERN.sub("_", raw).strip("._")
+    return sanitized or "upload.bin"
+
+
+def _store_upload(file: UploadFile) -> dict[str, Any]:
+    upload_dir = get_upload_dir()
+    safe_name = _safe_upload_name(file.filename)
+    destination = upload_dir / f"{token_hex(6)}_{safe_name}"
+    with destination.open("wb") as handle:
+        shutil.copyfileobj(file.file, handle)
+    try:
+        size = destination.stat().st_size
+    finally:
+        file.file.close()
+    return {
+        "filename": safe_name,
+        "content_type": file.content_type or "application/octet-stream",
+        "path": str(destination.resolve()),
+        "size": size,
+    }
+
+
+def _wrap(handler):
+    try:
+        return handler()
+    except Exception as exc:
+        LOGGER.exception("Foldseek API call failed")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
 @app.get("/", response_class=HTMLResponse)
 def home() -> str:
     return load_chat_ui()
@@ -165,21 +208,19 @@ def ui_status() -> dict[str, Any]:
             "supported_modules": service.available_modules(),
             "tmp_dir": settings.tmp_dir,
             "result_dir": settings.result_dir,
+            "upload_dir": settings.upload_dir,
         },
     }
+
+
+@app.post("/ui/upload")
+def upload_file(file: UploadFile = File(...)) -> dict[str, Any]:
+    return _wrap(lambda: _store_upload(file))
 
 
 @app.get("/v1/models")
 def list_models() -> dict[str, Any]:
     return {"data": [{"id": "foldseek-search-agent", "object": "model"}]}
-
-
-def _wrap(handler):
-    try:
-        return handler()
-    except Exception as exc:
-        LOGGER.exception("Foldseek API call failed")
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @app.post("/search_structure")
@@ -309,7 +350,11 @@ def chat_completions(req: ChatCompletionRequest) -> dict[str, Any]:
     if is_reasoning_query(content):
         if latest_result:
             reasoner = get_result_reasoner()
-            current_mode = str(req.reasoning_context.get("current_mode") if isinstance(req.reasoning_context, dict) else "search")
+            current_mode = str(
+                req.reasoning_context.get("current_mode")
+                if isinstance(req.reasoning_context, dict)
+                else "search"
+            )
             reply = reasoner.reply(
                 message=content,
                 latest_result=latest_result,
@@ -331,7 +376,12 @@ def chat_completions(req: ChatCompletionRequest) -> dict[str, Any]:
             "请先执行一次 Foldseek 操作，或在请求里附带 latest_result / reasoning_context 之后再追问。",
             extra={
                 "chat_mode": "reasoning",
-                "reasoning_context": build_reasoning_context("reasoning", None, previous_best_target, current_mode="search"),
+                "reasoning_context": build_reasoning_context(
+                    "reasoning",
+                    None,
+                    previous_best_target,
+                    current_mode="search",
+                ),
             },
         )
 
@@ -362,7 +412,11 @@ def chat_completions(req: ChatCompletionRequest) -> dict[str, Any]:
         )
 
     result = _wrap(lambda: service.execute_plan(plan))
-    previous_target = extras_from_latest_result(latest_result).get("best_hit", {}).get("target", previous_best_target)
+    previous_target = (
+        extras_from_latest_result(latest_result)
+        .get("best_hit", {})
+        .get("target", previous_best_target)
+    )
     extra = extras_from_latest_result(result)
     extra["chat_mode"] = "execution"
     extra["operation_plan"] = plan

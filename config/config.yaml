@@ -8,6 +8,7 @@ databases:
 
 tmp_dir: tmp
 result_dir: results
+upload_dir: uploads
 
 search:
   max_seqs: 100

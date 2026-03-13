@@ -120,5 +120,5 @@ echo "- PID file: ${AGENT_PID_FILE}"
 echo "- Browser:"
 discover_access_urls "$API_HOST" "$API_PORT" | while read -r url; do
   [[ -z "$url" ]] && continue
-  echo "  * ${url}"
+  echo "  * ${url}/"
 done

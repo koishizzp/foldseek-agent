@@ -7,12 +7,14 @@
 - FastAPI 服务层
 - OpenAI 风格的 `POST /v1/chat/completions`
 - 基于 `latest_result` 和 `reasoning_context` 的结果解释
+- 浏览器工作台
+- 文件上传到服务器后直接复用
 
 没有照搬无关内容，比如训练数据、surrogate、ESM3 服务、GFP 专用工作流。
 
 ## 已支持的 Foldseek 模块
 
-当前仓库已经覆盖约定好的 8+1 模块：
+当前仓库已经覆盖 8+1 模块：
 
 1. `easy-search`
 2. `easy-cluster`
@@ -38,12 +40,12 @@ agent/
   service.py          # 结构化服务层
   settings.py         # .env / 环境变量 / yaml 配置
   planner.py          # 自然语言 -> Foldseek 模块与参数
-  reasoner.py         # 检索结果追问解释
+  reasoner.py         # 结果追问解释
   chat.py             # OpenAI 风格 chat 辅助函数
 
 api/
   main.py             # FastAPI 应用入口
-  chat_ui.html        # 浏览器工作台页面
+  chat_ui.html        # 浏览器工作台
 
 config/
   config.yaml         # 默认服务器配置
@@ -65,6 +67,8 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+注意：上传接口依赖 `python-multipart`，已经包含在 `requirements.txt` 里。
+
 ## 配置
 
 默认配置文件是 `config/config.yaml`。
@@ -77,7 +81,7 @@ foldseek_path: foldseek
 default_database: afdb50
 ```
 
-数据库前缀、临时目录、结果目录，既可以在 YAML 里配置，也可以通过环境变量覆盖。
+数据库前缀、临时目录、结果目录、上传目录，既可以在 YAML 里配置，也可以通过环境变量覆盖。
 
 ### 与 `esm3-agent` 复用的 LLM 变量
 
@@ -104,6 +108,7 @@ FOLDSEEK_AGENT_DEFAULT_DATABASE=afdb50
 FOLDSEEK_AGENT_DATABASES_JSON='{"afdb50":"/mnt/disk3/tio_nekton4/foldseek/<afdb50_db_path>"}'
 FOLDSEEK_AGENT_TMP_DIR=/mnt/disk3/tio_nekton4/foldseek/tmp
 FOLDSEEK_AGENT_RESULT_DIR=/mnt/disk3/tio_nekton4/foldseek/results
+FOLDSEEK_AGENT_UPLOAD_DIR=/mnt/disk3/tio_nekton4/foldseek-agent/uploads
 FOLDSEEK_AGENT_BASE_URL=http://127.0.0.1:8000
 FOLDSEEK_AGENT_API_LOG=logs/foldseek-agent.log
 FOLDSEEK_AGENT_API_PID_FILE=logs/foldseek-agent.pid
@@ -224,6 +229,26 @@ curl -X POST http://127.0.0.1:8000/createindex \
   -d '{"target_db":"/abs/path/db/mydb"}'
 ```
 
+### 上传接口
+
+如果你想先把本地文件传到服务器，再把服务器路径用于聊天或模块执行，可以直接调用：
+
+```bash
+curl -X POST http://127.0.0.1:8000/ui/upload \
+  -F "file=@/local/path/query.pdb"
+```
+
+返回结果里会包含服务器绝对路径，例如：
+
+```json
+{
+  "filename": "query.pdb",
+  "content_type": "chemical/x-pdb",
+  "path": "/mnt/disk3/tio_nekton4/foldseek-agent/uploads/abc123_query.pdb",
+  "size": 12345
+}
+```
+
 ### OpenAI 兼容聊天接口
 
 这个入口现在会优先用 LLM/启发式规则把自然语言路由到 8+1 模块中的合适操作。
@@ -261,7 +286,7 @@ curl -X POST http://127.0.0.1:8000/v1/chat/completions \
 http://服务器IP:8000/
 ```
 
-页面里有两块：
+页面里有三块：
 
 1. 左侧 `LLM Chat`
    - 用自然语言调用 Foldseek 模块
@@ -269,6 +294,10 @@ http://服务器IP:8000/
 2. 右侧 `Direct Module Runner`
    - 直接选择模块并发送 JSON
    - 适合 `createdb`、`result2msa`、`createindex` 这种精确执行场景
+3. 上方 `文件上传`
+   - 把本地文件上传到服务器
+   - 返回服务器绝对路径
+   - 一键插入聊天框或当前模块 JSON
 
 ## 服务器部署建议
 
@@ -278,6 +307,7 @@ http://服务器IP:8000/
 2. Foldseek 部署根目录：`/mnt/disk3/tio_nekton4/foldseek`
 3. `.env` 里把 `FOLDSEEK_AGENT_FOLDSEEK_ROOT` 指向 `/mnt/disk3/tio_nekton4/foldseek`
 4. LLM 继续复用和 `esm3-agent` 相同的 `OPENAI_*` 变量
+5. 建议单独给 `FOLDSEEK_AGENT_UPLOAD_DIR` 预留一个可写目录
 
 ## 冒烟测试
 
@@ -302,8 +332,7 @@ http://服务器IP:8000/
 3. 后台启动 `start_agent.sh`
 4. 写 PID 到 `logs/foldseek-agent.pid`
 5. 等待 `/health` 成功
-
-脚本现在还会尽量打印服务器可访问的 IP 地址，方便你直接从电脑浏览器打开。
+6. 尽量打印可从浏览器访问的服务器地址
 
 查看状态：
 
@@ -336,4 +365,6 @@ pytest -q
 - 搜索结果解析与过滤
 - 配置加载
 - API 接口
+- 文件上传
+- 模块路由规划
 - 新增模块的命令构造

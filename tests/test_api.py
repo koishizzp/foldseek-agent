@@ -1,6 +1,7 @@
 from fastapi.testclient import TestClient
 
 from api.main import app
+from agent.settings import Settings
 
 
 class DummyService:
@@ -190,7 +191,24 @@ def test_home_returns_html():
 
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
-    assert "Foldseek Agent Console" in response.text
+    assert "Foldseek Agent 工作台" in response.text
+
+
+def test_upload_endpoint(monkeypatch, tmp_path):
+    settings = Settings(upload_dir=str(tmp_path / "uploads"))
+    monkeypatch.setattr("api.main.get_settings", lambda: settings)
+    client = TestClient(app)
+
+    response = client.post(
+        "/ui/upload",
+        files={"file": ("query.pdb", b"HEADER TEST\n", "chemical/x-pdb")},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["filename"] == "query.pdb"
+    assert payload["path"].endswith("query.pdb")
+    assert (tmp_path / "uploads").exists()
 
 
 def test_chat_completions_execution(monkeypatch):
@@ -257,6 +275,18 @@ def test_modules_endpoint(monkeypatch):
     assert response.status_code == 200
     payload = response.json()
     assert "createindex" in payload["modules"]
+
+
+def test_ui_status_contains_upload_dir(monkeypatch, tmp_path):
+    monkeypatch.setattr("api.main.get_search_service", lambda: DummyService())
+    monkeypatch.setattr("api.main.get_settings", lambda: Settings(upload_dir=str(tmp_path / "uploads")))
+    client = TestClient(app)
+
+    response = client.get("/ui/status")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["foldseek"]["upload_dir"] == str(tmp_path / "uploads")
 
 
 def test_easy_cluster_endpoint(monkeypatch):
