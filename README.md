@@ -1,18 +1,18 @@
 # Foldseek Agent
 
-Foldseek Agent is a server-oriented Python wrapper around Foldseek. It keeps the useful architecture patterns from `D:\esm3-agent\esm3-agent`:
+这是一个面向服务器部署的 Foldseek Python Agent。它参考了 `D:\esm3-agent\esm3-agent` 里真正有用的架构部分：
 
-- env-based configuration
-- OpenAI-compatible LLM integration
-- FastAPI service layer
-- OpenAI-style `POST /v1/chat/completions`
-- result reasoning with `latest_result` and `reasoning_context`
+- 基于环境变量和 `.env` 的配置加载
+- OpenAI 兼容 LLM 接入
+- FastAPI 服务层
+- OpenAI 风格的 `POST /v1/chat/completions`
+- 基于 `latest_result` 和 `reasoning_context` 的结果解释
 
-It does not copy unrelated parts such as training data, surrogate models, ESM3 services, or GFP workflows.
+没有照搬无关内容，比如训练数据、surrogate、ESM3 服务、GFP 专用工作流。
 
-## Supported Foldseek modules
+## 已支持的 Foldseek 模块
 
-This repo now covers the agreed 8+1 module set:
+当前仓库已经覆盖约定好的 8+1 模块：
 
 1. `easy-search`
 2. `easy-cluster`
@@ -24,39 +24,39 @@ This repo now covers the agreed 8+1 module set:
 8. `aln2tmscore`
 9. `createindex`
 
-The command syntax follows the official Foldseek documentation:
+命令语义对齐 Foldseek 官方文档：
 
 - [Foldseek README](https://github.com/steineggerlab/foldseek)
 
-## Repository layout
+## 目录结构
 
 ```text
 agent/
-  foldseek_agent.py   # high-level Foldseek operations
-  runner.py           # subprocess wrapper for the 8+1 modules
-  parser.py           # tabular result parsing
-  service.py          # structured service layer
-  settings.py         # .env / env / yaml settings
-  planner.py          # NL -> easy-search parameters
-  reasoner.py         # follow-up ranking explanation
-  chat.py             # OpenAI-style chat helpers
+  foldseek_agent.py   # Foldseek 高层操作封装
+  runner.py           # 8+1 模块的 subprocess 封装
+  parser.py           # 表格结果解析
+  service.py          # 结构化服务层
+  settings.py         # .env / 环境变量 / yaml 配置
+  planner.py          # 自然语言 -> easy-search 参数
+  reasoner.py         # 检索结果追问解释
+  chat.py             # OpenAI 风格 chat 辅助函数
 
 api/
-  main.py             # FastAPI app
+  main.py             # FastAPI 应用入口
 
 config/
-  config.yaml         # default server-side config
+  config.yaml         # 默认服务器配置
 
-main.py               # CLI entrypoint
-start_agent.sh        # Linux startup helper
-start_all.sh          # managed startup with log/PID/health wait
-stop_all.sh           # managed shutdown
-status_all.sh         # managed status inspection
-restart.sh            # restart helper
-smoke_test.sh         # API smoke test
+main.py               # CLI 入口
+start_agent.sh        # 直接启动 API
+start_all.sh          # 带日志/PID/健康检查等待的启动脚本
+stop_all.sh           # 停止脚本
+status_all.sh         # 状态检查脚本
+restart.sh            # 重启脚本
+smoke_test.sh         # API 冒烟测试
 ```
 
-## Install
+## 安装
 
 ```bash
 python -m venv .venv
@@ -64,11 +64,11 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Configuration
+## 配置
 
-Default config file: `config/config.yaml`
+默认配置文件是 `config/config.yaml`。
 
-It is already aligned with your target server root:
+它已经按你的目标服务器路径预设：
 
 ```yaml
 foldseek_root: /mnt/disk3/tio_nekton4/foldseek
@@ -76,11 +76,11 @@ foldseek_path: foldseek
 default_database: afdb50
 ```
 
-Database prefixes, temp directories, and result directories can be set either in YAML or via environment variables.
+数据库前缀、临时目录、结果目录，既可以在 YAML 里配置，也可以通过环境变量覆盖。
 
-### Reused OpenAI-compatible variables
+### 与 `esm3-agent` 复用的 LLM 变量
 
-The repo accepts the same LLM variables as `esm3-agent`:
+这个仓库支持和 `esm3-agent` 一样的 OpenAI 兼容变量：
 
 ```bash
 OPENAI_API_KEY=...
@@ -88,9 +88,9 @@ OPENAI_BASE_URL=...
 OPENAI_MODEL=gpt-4o-mini
 ```
 
-### Foldseek Agent variables
+### Foldseek Agent 自己的变量
 
-See `.env.example`. The important ones are:
+完整示例见 `.env.example`，重点变量如下：
 
 ```bash
 FOLDSEEK_AGENT_API_HOST=0.0.0.0
@@ -108,21 +108,21 @@ FOLDSEEK_AGENT_API_LOG=logs/foldseek-agent.log
 FOLDSEEK_AGENT_API_PID_FILE=logs/foldseek-agent.pid
 ```
 
-## CLI
+## CLI 用法
 
-Legacy search mode is still supported:
+旧的搜索模式仍然可用：
 
 ```bash
 python main.py /abs/path/query.pdb --database afdb50 --topk 10 --summary
 ```
 
-Configured database aliases:
+列出已配置的数据库别名：
 
 ```bash
 python main.py --config config/config.yaml list-configured-databases
 ```
 
-Subcommands for the 8+1 module set:
+8+1 模块对应的子命令：
 
 ```bash
 python main.py search /abs/path/query.pdb --database afdb50 --topk 5
@@ -136,21 +136,21 @@ python main.py aln2tmscore queryDB targetDB alnDB --output-db tmscoreDB
 python main.py createindex /abs/path/db/mydb
 ```
 
-## API
+## API 用法
 
-Start the API:
+启动 API：
 
 ```bash
 uvicorn api.main:app --host 0.0.0.0 --port 8000
 ```
 
-or:
+或者：
 
 ```bash
 ./start_agent.sh
 ```
 
-Managed service scripts:
+如果希望用带日志、PID、健康检查等待的托管脚本：
 
 ```bash
 chmod +x start_all.sh stop_all.sh status_all.sh restart.sh start.sh stop.sh status.sh
@@ -160,7 +160,7 @@ chmod +x start_all.sh stop_all.sh status_all.sh restart.sh start.sh stop.sh stat
 ./restart.sh
 ```
 
-Health and status:
+健康检查与状态接口：
 
 ```bash
 curl http://127.0.0.1:8000/health
@@ -168,7 +168,7 @@ curl http://127.0.0.1:8000/ui/status
 curl http://127.0.0.1:8000/foldseek/modules
 ```
 
-### Search-style endpoints
+### 搜索类接口
 
 ```bash
 curl -X POST http://127.0.0.1:8000/search_structure \
@@ -191,7 +191,7 @@ curl -X POST http://127.0.0.1:8000/easy_multimersearch \
   }'
 ```
 
-### Utility/module endpoints
+### 工具类接口
 
 ```bash
 curl -X POST http://127.0.0.1:8000/easy_cluster \
@@ -223,9 +223,9 @@ curl -X POST http://127.0.0.1:8000/createindex \
   -d '{"target_db":"/abs/path/db/mydb"}'
 ```
 
-### OpenAI-compatible chat endpoint
+### OpenAI 兼容聊天接口
 
-This endpoint is still centered on `easy-search` for natural-language requests:
+这个入口目前仍然主要围绕 `easy-search` 做自然语言编排：
 
 ```bash
 curl -X POST http://127.0.0.1:8000/v1/chat/completions \
@@ -235,60 +235,60 @@ curl -X POST http://127.0.0.1:8000/v1/chat/completions \
     "messages": [
       {
         "role": "user",
-        "content": "Use afdb50 to search /abs/path/query.pdb and return top 5 hits"
+        "content": "用 afdb50 检索 /abs/path/query.pdb，返回前 5 个结果"
       }
     ]
   }'
 ```
 
-For follow-up ranking questions, pass back the previous `reasoning_context`.
+如果继续追问排序原因，传回上一轮的 `reasoning_context` 即可。
 
-## Server deployment
+## 服务器部署建议
 
-Recommended layout after you move this repo to the server:
+后续你把仓库迁到服务器时，建议按这个布局：
 
-1. repo root: `/mnt/disk3/tio_nekton4/foldseek-agent`
-2. Foldseek deployment root: `/mnt/disk3/tio_nekton4/foldseek`
-3. `.env` points `FOLDSEEK_AGENT_FOLDSEEK_ROOT` to `/mnt/disk3/tio_nekton4/foldseek`
-4. LLM access reuses the same `OPENAI_*` variables as `esm3-agent`
+1. 仓库根目录：`/mnt/disk3/tio_nekton4/foldseek-agent`
+2. Foldseek 部署根目录：`/mnt/disk3/tio_nekton4/foldseek`
+3. `.env` 里把 `FOLDSEEK_AGENT_FOLDSEEK_ROOT` 指向 `/mnt/disk3/tio_nekton4/foldseek`
+4. LLM 继续复用和 `esm3-agent` 相同的 `OPENAI_*` 变量
 
-## Smoke test
+## 冒烟测试
 
 ```bash
 ./smoke_test.sh
 ```
 
-If you also set `FOLDSEEK_AGENT_SMOKE_PDB_PATH`, the script will exercise `/search_structure` too.
+如果设置了 `FOLDSEEK_AGENT_SMOKE_PDB_PATH`，脚本还会顺带调用 `/search_structure`。
 
-## Ops scripts
+## 运维脚本说明
 
-This repo is a single-service deployment, so `start_all.sh` means "start the Foldseek Agent API stack":
+这个仓库是单服务部署，所以 `start_all.sh` 的含义是“启动 Foldseek Agent API 整套服务”：
 
 ```bash
 ./start_all.sh
 ```
 
-It will:
+它会做这些事：
 
-1. load `.env` if present
-2. create `logs/`
-3. start `start_agent.sh` in background
-4. write PID to `logs/foldseek-agent.pid`
-5. wait for `/health`
+1. 读取 `.env`
+2. 创建 `logs/`
+3. 后台启动 `start_agent.sh`
+4. 写 PID 到 `logs/foldseek-agent.pid`
+5. 等待 `/health` 成功
 
-Status:
+查看状态：
 
 ```bash
 ./status_all.sh
 ```
 
-Stop:
+停止服务：
 
 ```bash
 ./stop_all.sh
 ```
 
-Short wrappers are also provided:
+也提供短名包装：
 
 ```bash
 ./start.sh
@@ -296,15 +296,15 @@ Short wrappers are also provided:
 ./stop.sh
 ```
 
-## Tests
+## 测试
 
 ```bash
 pytest -q
 ```
 
-Current coverage includes:
+当前测试覆盖：
 
-- search parsing and filtering
-- settings loading
-- API endpoints
-- command construction for new modules
+- 搜索结果解析与过滤
+- 配置加载
+- API 接口
+- 新增模块的命令构造
