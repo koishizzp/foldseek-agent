@@ -46,23 +46,30 @@ def _mock_result_file(tmp_path):
     return mock_result
 
 
-def test_search_structure_returns_top_hits(tmp_path, test_config):
+@pytest.fixture
+def query_pdb(tmp_path):
+    path = tmp_path / "query.pdb"
+    path.write_text("HEADER TEST\n", encoding="utf-8")
+    return path
+
+
+def test_search_structure_returns_top_hits(tmp_path, test_config, query_pdb):
     agent = FoldseekAgent(str(test_config))
     agent.runner = DummyRunner(_mock_result_file(tmp_path))
 
-    hits = agent.search_structure("example.pdb", topk=1)
+    hits = agent.search_structure(str(query_pdb), topk=1)
 
     assert isinstance(hits, pd.DataFrame)
     assert len(hits) == 1
     assert hits.iloc[0]["target"] == "t1"
 
 
-def test_search_structure_supports_filters(tmp_path, test_config):
+def test_search_structure_supports_filters(tmp_path, test_config, query_pdb):
     agent = FoldseekAgent(str(test_config))
     agent.runner = DummyRunner(_mock_result_file(tmp_path))
 
     hits = agent.search_structure(
-        "example.pdb",
+        str(query_pdb),
         min_tmscore=0.75,
         max_evalue=1e-3,
         min_prob=0.85,
@@ -71,19 +78,20 @@ def test_search_structure_supports_filters(tmp_path, test_config):
     assert set(hits["target"]) == {"t1", "t2"}
 
 
-def test_unknown_database_raises(tmp_path, test_config):
+def test_unknown_database_allows_raw_path(tmp_path, test_config, query_pdb):
     agent = FoldseekAgent(str(test_config))
     agent.runner = DummyRunner(_mock_result_file(tmp_path))
 
-    with pytest.raises(KeyError):
-        agent.search_structure("example.pdb", database="unknown")
+    hits = agent.search_structure(str(query_pdb), database="/raw/db/prefix", topk=1)
+
+    assert len(hits) == 1
 
 
-def test_export_json(tmp_path, test_config):
+def test_export_json(tmp_path, test_config, query_pdb):
     agent = FoldseekAgent(str(test_config))
     agent.runner = DummyRunner(_mock_result_file(tmp_path))
 
-    hits = agent.search_structure("example.pdb", topk=2)
+    hits = agent.search_structure(str(query_pdb), topk=2)
     output = tmp_path / "hits" / "top_hits.json"
     result = agent.export_hits_json(hits, str(output))
 

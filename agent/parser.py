@@ -7,9 +7,17 @@ class FoldseekParser:
     COLUMNS = ["query", "target", "evalue", "tmscore", "rmsd", "prob"]
 
     def parse(self, result_file: str) -> pd.DataFrame:
-        df = pd.read_csv(result_file, sep="\t", names=self.COLUMNS)
-        for col in ("evalue", "tmscore", "rmsd", "prob"):
-            df[col] = pd.to_numeric(df[col], errors="coerce")
+        return self.parse_table(result_file, self.COLUMNS)
+
+    def parse_table(self, result_file: str, columns: list[str]) -> pd.DataFrame:
+        df = pd.read_csv(result_file, sep="\t", names=columns)
+        for col in columns:
+            if col in {"query", "target"}:
+                continue
+            converted = pd.to_numeric(df[col], errors="coerce")
+            non_null = df[col].notna().sum()
+            if non_null and int(converted.notna().sum()) == int(non_null):
+                df[col] = converted
         return df
 
     def filter_hits(

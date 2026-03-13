@@ -1,13 +1,30 @@
+foldseek_root: /mnt/disk3/tio_nekton4/foldseek
 foldseek_path: foldseek
+default_database: afdb50
 
 databases:
-  afdb50: /data/foldseek/afdb50
-  pdb: /data/foldseek/pdb
+  afdb50: afdb50
+  pdb: pdb
 
-tmp_dir: ./tmp
-result_dir: ./results
+tmp_dir: tmp
+result_dir: results
 
 search:
   max_seqs: 100
   evalue: 1e-3
   timeout_seconds: 600
+
+cluster:
+  timeout_seconds: 3600
+
+multimer:
+  max_seqs: 100
+  evalue: 1e-3
+  timeout_seconds: 3600
+
+createdb:
+  timeout_seconds: 3600
+
+postprocess:
+  timeout_seconds: 3600
+  msa_format_mode: 6

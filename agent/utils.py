@@ -25,3 +25,17 @@ def validate_database_name(database: str, allowed: Iterable[str]) -> None:
     if database not in allowed:
         available = ", ".join(sorted(allowed))
         raise KeyError(f"Unknown database `{database}`. Available databases: {available}")
+
+
+def validate_query_path(path: str | Path) -> None:
+    query_path = Path(path)
+    if not query_path.exists():
+        raise FileNotFoundError(f"Query structure file does not exist: {query_path}")
+    if not query_path.is_file():
+        raise ValueError(f"Query structure path is not a file: {query_path}")
+
+
+def validate_existing_path(path: str | Path) -> None:
+    target_path = Path(path)
+    if not target_path.exists():
+        raise FileNotFoundError(f"Path does not exist: {target_path}")
