@@ -47,6 +47,71 @@ class SearchService:
     def available_modules(self) -> list[str]:
         return list(self.SUPPORTED_MODULES)
 
+    def execute_plan(self, plan: dict[str, Any]) -> dict[str, Any]:
+        module = str(plan.get("module") or "").strip()
+        params = dict(plan.get("params") or {})
+
+        if module == "easy-search":
+            return self.search_structure(
+                params["pdb_path"],
+                database=params.get("database"),
+                topk=int(params.get("topk") or 10),
+                min_tmscore=params.get("min_tmscore"),
+                max_evalue=params.get("max_evalue"),
+                min_prob=params.get("min_prob"),
+            )
+        if module == "easy-multimersearch":
+            return self.multimer_search(
+                params["pdb_path"],
+                database=str(params["database"]),
+                topk=int(params.get("topk") or 10),
+            )
+        if module == "easy-cluster":
+            return self.easy_cluster(
+                params["input_path"],
+                output_prefix=params.get("output_prefix"),
+                alignment_type=params.get("alignment_type"),
+                coverage=params.get("coverage"),
+            )
+        if module == "easy-multimercluster":
+            return self.easy_multimercluster(
+                params["input_path"],
+                output_prefix=params.get("output_prefix"),
+                multimer_tmscore=params.get("multimer_tmscore"),
+                chain_tmscore=params.get("chain_tmscore"),
+                interface_lddt=params.get("interface_lddt"),
+            )
+        if module == "createdb":
+            return self.createdb(
+                params["input_path"],
+                output_db=params.get("output_db"),
+                prostt5_model=params.get("prostt5_model"),
+            )
+        if module == "databases":
+            return self.download_database(
+                params["database_name"],
+                output_db=params.get("output_db"),
+            )
+        if module == "result2msa":
+            return self.result2msa(
+                params["query_db"],
+                params["target_db"],
+                params["alignment_db"],
+                output_msa_db=params.get("output_msa_db"),
+                msa_format_mode=params.get("msa_format_mode"),
+            )
+        if module == "aln2tmscore":
+            return self.aln2tmscore(
+                params["query_db"],
+                params["target_db"],
+                params["alignment_db"],
+                output_db=params.get("output_db"),
+            )
+        if module == "createindex":
+            return self.createindex(params["target_db"])
+
+        raise ValueError(f"Unsupported Foldseek module: {module}")
+
     def _resolve_database(self, database: str | None) -> str:
         available = self.available_databases()
         if database:
@@ -230,22 +295,43 @@ class SearchService:
         return self._normalize_operation(self.agent.createindex(target_db))
 
     def format_execution_reply(self, result: dict[str, Any]) -> str:
+        module = str(result.get("module") or "easy-search")
+        if module == "easy-multimersearch":
+            hits = result.get("hits", [])
+            if not hits:
+                return "已执行 easy-multimersearch，但当前没有保留下来的复合体命中。"
+            best = hits[0]
+            return (
+                f"已完成 easy-multimersearch，最佳复合体命中是 {best['target']}。"
+                f" complexqTM={float(best.get('complexqtmscore') or 0):.4f}，"
+                f" prob={float(best.get('prob') or 0):.4f}。"
+            )
+
+        if module in {"easy-cluster", "easy-multimercluster", "createdb", "databases", "result2msa", "aln2tmscore", "createindex"}:
+            artifacts = []
+            for key in ("result_prefix", "output_db", "output_msa_db", "cluster_tsv", "repseq_fasta", "allseq_fasta", "target_db"):
+                value = result.get(key)
+                if value:
+                    artifacts.append(f"{key}={value}")
+            suffix = f" 产物: {', '.join(artifacts)}。" if artifacts else ""
+            return f"已执行 {module}。{suffix}".strip()
+
         summary = result.get("summary", {})
         hits = result.get("hits", [])
         if not hits:
             database = result.get("request", {}).get("database", "-")
-            return f"Foldseek search finished, but no hits passed the filters in database {database}."
+            return f"已执行 Foldseek 检索，但数据库 {database} 下没有结果通过当前过滤条件。"
 
         best = hits[0]
         lines = [
             (
-                f"Foldseek search finished. Best hit: {best['target']} "
+                f"已完成 Foldseek 检索，最佳命中是 {best['target']} "
                 f"(TM-score={float(best['tmscore']):.4f}, prob={float(best['prob']):.4f}, "
-                f"e-value={best['evalue']}, RMSD={float(best['rmsd']):.4f})."
+                f"e-value={best['evalue']}, RMSD={float(best['rmsd']):.4f})。"
             ),
             (
-                f"Returned {summary.get('count', len(hits))} hits from "
-                f"{result.get('request', {}).get('database', '-')}, topk={result.get('request', {}).get('topk', len(hits))}."
+                f"当前从 {result.get('request', {}).get('database', '-')} 返回 "
+                f"{summary.get('count', len(hits))} 条结果，topk={result.get('request', {}).get('topk', len(hits))}。"
             ),
         ]
         if len(hits) > 1:
@@ -253,6 +339,6 @@ class SearchService:
                 f"{item['target']}({float(item['tmscore']):.3f})"
                 for item in hits[: min(3, len(hits))]
             )
-            lines.append(f"Top hits: {preview}.")
-        lines.append("Ask a follow-up with latest_result or reasoning_context if you want a ranking explanation.")
+            lines.append(f"前几名命中: {preview}。")
+        lines.append("如果要继续问为什么某个命中更值得关注，请带上 latest_result 或 reasoning_context。")
         return "\n".join(lines)

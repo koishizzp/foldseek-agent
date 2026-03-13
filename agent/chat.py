@@ -42,11 +42,13 @@ def build_reasoning_context(
     chat_mode: str,
     latest_result: dict[str, Any] | None,
     previous_best_target: str | None,
+    *,
+    current_mode: str = "search",
 ) -> dict[str, Any]:
     context = {
         "version": 1,
         "chat_mode": chat_mode,
-        "current_mode": "search",
+        "current_mode": current_mode,
         "latest_result": latest_result or {},
         "previous_best_target": previous_best_target or "",
     }
@@ -61,7 +63,7 @@ def extras_from_latest_result(latest_result: dict[str, Any] | None) -> dict[str,
     summary = latest_result.get("summary") if isinstance(latest_result.get("summary"), dict) else {}
     best_hit = best_hit_from_result(latest_result)
     request = latest_result.get("request") if isinstance(latest_result.get("request"), dict) else {}
-    extra: dict[str, Any] = {}
+    extra: dict[str, Any] = {"module": latest_result.get("module")}
     if best_hit:
         extra["best_hit"] = best_hit
     if summary:
@@ -77,8 +79,21 @@ def is_reasoning_query(content: str) -> bool:
     text = content.lower().strip()
     if not text:
         return False
-    if any(keyword in text for keyword in ("search", "检索", "查一下", "查找", "foldseek")):
-        return False
+    execution_keywords = (
+        "search",
+        "cluster",
+        "createdb",
+        "result2msa",
+        "aln2tmscore",
+        "createindex",
+        "检索",
+        "聚类",
+        "建库",
+        "创建数据库",
+        "下载数据库",
+        "索引",
+        "foldseek",
+    )
     reasoning_keywords = (
         "why",
         "explain",
@@ -88,11 +103,13 @@ def is_reasoning_query(content: str) -> bool:
         "解释",
         "比较",
         "分析",
-        "哪个好",
+        "哪个更好",
         "哪一个更好",
         "差别",
     )
-    return any(keyword in text for keyword in reasoning_keywords)
+    if any(keyword in text for keyword in reasoning_keywords):
+        return True
+    return False if any(keyword in text for keyword in execution_keywords) else False
 
 
 def looks_like_why_question(content: str) -> bool:

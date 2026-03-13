@@ -1,0 +1,483 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Foldseek Agent Console</title>
+  <style>
+    :root {
+      --bg: #f4efe6;
+      --panel: rgba(255, 250, 242, 0.88);
+      --panel-strong: #fffaf2;
+      --ink: #1f2a1f;
+      --muted: #5f6b5f;
+      --line: rgba(31, 42, 31, 0.14);
+      --accent: #b04d2f;
+      --accent-2: #1d6b57;
+      --shadow: 0 24px 60px rgba(41, 31, 20, 0.12);
+      --radius: 22px;
+      --font-sans: "IBM Plex Sans", "Noto Sans SC", "Segoe UI", sans-serif;
+      --font-display: "Space Grotesk", "Noto Sans SC", "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: var(--font-sans);
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(176, 77, 47, 0.15), transparent 30%),
+        radial-gradient(circle at top right, rgba(29, 107, 87, 0.12), transparent 28%),
+        linear-gradient(180deg, #f7f2ea 0%, var(--bg) 100%);
+    }
+
+    .shell {
+      width: min(1380px, calc(100vw - 32px));
+      margin: 20px auto;
+      display: grid;
+      gap: 18px;
+    }
+
+    .hero, .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(16px);
+    }
+
+    .hero {
+      padding: 28px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .hero h1 {
+      margin: 0;
+      font-family: var(--font-display);
+      font-size: clamp(32px, 4vw, 54px);
+      line-height: 0.95;
+      letter-spacing: -0.04em;
+    }
+
+    .hero p {
+      margin: 0;
+      max-width: 920px;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.6;
+    }
+
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+    }
+
+    .status-card {
+      background: rgba(255,255,255,0.62);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px;
+      display: grid;
+      gap: 6px;
+    }
+
+    .status-card strong {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+
+    .status-card span {
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 18px;
+    }
+
+    .panel {
+      padding: 20px;
+      display: grid;
+      gap: 16px;
+      min-height: 520px;
+    }
+
+    .panel h2 {
+      margin: 0;
+      font-size: 18px;
+      font-family: var(--font-display);
+      letter-spacing: -0.03em;
+    }
+
+    .muted {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .chat-log {
+      min-height: 320px;
+      max-height: 520px;
+      overflow: auto;
+      display: grid;
+      gap: 12px;
+      padding-right: 4px;
+    }
+
+    .bubble {
+      border-radius: 18px;
+      padding: 14px 16px;
+      font-size: 14px;
+      line-height: 1.65;
+      white-space: pre-wrap;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.75);
+    }
+
+    .bubble.user {
+      background: rgba(176, 77, 47, 0.1);
+      border-color: rgba(176, 77, 47, 0.18);
+    }
+
+    .bubble.assistant {
+      background: rgba(29, 107, 87, 0.08);
+      border-color: rgba(29, 107, 87, 0.16);
+    }
+
+    textarea, input, select, button {
+      font: inherit;
+    }
+
+    textarea, input, select {
+      width: 100%;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.86);
+      padding: 12px 14px;
+      color: var(--ink);
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 88px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 999px;
+      padding: 12px 18px;
+      cursor: pointer;
+      color: white;
+      background: linear-gradient(135deg, var(--accent), #cd7048);
+      transition: transform 120ms ease, opacity 120ms ease;
+    }
+
+    button.secondary {
+      background: linear-gradient(135deg, var(--accent-2), #24856c);
+    }
+
+    button:hover { transform: translateY(-1px); }
+    button:disabled { opacity: 0.6; cursor: wait; }
+
+    .row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .payload {
+      min-height: 320px;
+      font-family: "IBM Plex Mono", "Fira Code", monospace;
+      font-size: 13px;
+    }
+
+    .response {
+      min-height: 240px;
+      max-height: 420px;
+      overflow: auto;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255,255,255,0.72);
+      font-family: "IBM Plex Mono", "Fira Code", monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      line-height: 1.5;
+    }
+
+    .tagline {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .tag {
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(31, 42, 31, 0.06);
+      border: 1px solid var(--line);
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    @media (max-width: 980px) {
+      .workspace {
+        grid-template-columns: 1fr;
+      }
+      .row {
+        grid-template-columns: 1fr;
+      }
+      .shell {
+        width: min(100vw - 18px, 1380px);
+        margin: 10px auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="hero">
+      <div class="tagline" id="module-tags"></div>
+      <h1>Foldseek Agent Console</h1>
+      <p>左侧是 LLM 驱动的自然语言工作台，可以直接让 Agent 判断该调用哪个 Foldseek 模块。右侧是所有模块的显式执行面板，适合精确控制输入参数。这个页面默认优先利用你已经配置好的 OpenAI 兼容接口。</p>
+      <div class="status-grid" id="status-grid"></div>
+    </section>
+
+    <section class="workspace">
+      <div class="panel">
+        <div>
+          <h2>LLM Chat</h2>
+          <p class="muted">支持自然语言调用 Foldseek 模块。搜索完成后，继续追问“为什么第一名更好”这类问题时，会自动利用 reasoning context。</p>
+        </div>
+        <div class="chat-log" id="chat-log"></div>
+        <textarea id="chat-input" placeholder="例如：用 afdb50 检索 /abs/path/query.pdb，返回前 5 个结果。或者：为 /abs/path/mydb 创建索引。"></textarea>
+        <div class="actions">
+          <button id="chat-send">发送</button>
+          <button class="secondary" id="chat-clear">清空上下文</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div>
+          <h2>Direct Module Runner</h2>
+          <p class="muted">直接选择模块并发送 JSON。适合 `createdb`、`result2msa`、`createindex` 这类参数更明确的场景。</p>
+        </div>
+        <div class="row">
+          <div>
+            <label class="muted" for="module-select">模块</label>
+            <select id="module-select"></select>
+          </div>
+          <div>
+            <label class="muted" for="endpoint-view">接口</label>
+            <input id="endpoint-view" readonly>
+          </div>
+        </div>
+        <textarea class="payload" id="payload-editor"></textarea>
+        <div class="actions">
+          <button id="module-run">执行模块</button>
+          <button class="secondary" id="payload-reset">重置示例</button>
+        </div>
+        <div class="response" id="module-response">等待执行…</div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const chatLog = document.getElementById("chat-log");
+    const chatInput = document.getElementById("chat-input");
+    const chatSend = document.getElementById("chat-send");
+    const chatClear = document.getElementById("chat-clear");
+    const moduleSelect = document.getElementById("module-select");
+    const endpointView = document.getElementById("endpoint-view");
+    const payloadEditor = document.getElementById("payload-editor");
+    const payloadReset = document.getElementById("payload-reset");
+    const moduleRun = document.getElementById("module-run");
+    const moduleResponse = document.getElementById("module-response");
+    const statusGrid = document.getElementById("status-grid");
+    const moduleTags = document.getElementById("module-tags");
+
+    const moduleConfig = {
+      "easy-search": {
+        endpoint: "/search_structure",
+        payload: { pdb_path: "/abs/path/query.pdb", database: "afdb50", topk: 5, min_tmscore: 0.6 }
+      },
+      "easy-cluster": {
+        endpoint: "/easy_cluster",
+        payload: { input_path: "/abs/path/input_dir", output_prefix: "/abs/path/out/cluster", alignment_type: 1, coverage: 0.9 }
+      },
+      "easy-multimersearch": {
+        endpoint: "/easy_multimersearch",
+        payload: { pdb_path: "/abs/path/query_multimer.pdb", database: "afdb50", topk: 5 }
+      },
+      "easy-multimercluster": {
+        endpoint: "/easy_multimercluster",
+        payload: { input_path: "/abs/path/input_dir", output_prefix: "/abs/path/out/mcluster" }
+      },
+      "createdb": {
+        endpoint: "/createdb",
+        payload: { input_path: "/abs/path/input_dir", output_db: "/abs/path/db/mydb" }
+      },
+      "databases": {
+        endpoint: "/databases",
+        payload: { database_name: "afdb50", output_db: "/abs/path/db/afdb50" }
+      },
+      "result2msa": {
+        endpoint: "/result2msa",
+        payload: { query_db: "queryDB", target_db: "targetDB", alignment_db: "alnDB", output_msa_db: "msaDB", msa_format_mode: 6 }
+      },
+      "aln2tmscore": {
+        endpoint: "/aln2tmscore",
+        payload: { query_db: "queryDB", target_db: "targetDB", alignment_db: "alnDB", output_db: "tmscoreDB" }
+      },
+      "createindex": {
+        endpoint: "/createindex",
+        payload: { target_db: "/abs/path/db/mydb" }
+      }
+    };
+
+    const chatState = {
+      messages: [],
+      reasoningContext: null
+    };
+
+    function addBubble(role, content) {
+      const node = document.createElement("div");
+      node.className = `bubble ${role}`;
+      node.textContent = content;
+      chatLog.appendChild(node);
+      chatLog.scrollTop = chatLog.scrollHeight;
+    }
+
+    function setModulePayload(moduleName) {
+      const config = moduleConfig[moduleName];
+      endpointView.value = config.endpoint;
+      payloadEditor.value = JSON.stringify(config.payload, null, 2);
+    }
+
+    async function loadStatus() {
+      const [statusResp, modulesResp] = await Promise.all([
+        fetch("/ui/status"),
+        fetch("/foldseek/modules")
+      ]);
+      const status = await statusResp.json();
+      const modules = await modulesResp.json();
+
+      statusGrid.innerHTML = "";
+      const cards = [
+        ["Agent", status.agent?.app_name || "Foldseek Agent"],
+        ["LLM", status.llm?.configured ? `${status.llm.model}` : "Not configured"],
+        ["Default DB", status.foldseek?.default_database || "-"],
+        ["Binary", status.foldseek?.binary || "foldseek"]
+      ];
+      for (const [label, value] of cards) {
+        const card = document.createElement("div");
+        card.className = "status-card";
+        card.innerHTML = `<strong>${label}</strong><span>${value}</span>`;
+        statusGrid.appendChild(card);
+      }
+
+      moduleTags.innerHTML = "";
+      moduleSelect.innerHTML = "";
+      for (const moduleName of modules.modules || []) {
+        const tag = document.createElement("span");
+        tag.className = "tag";
+        tag.textContent = moduleName;
+        moduleTags.appendChild(tag);
+
+        const option = document.createElement("option");
+        option.value = moduleName;
+        option.textContent = moduleName;
+        moduleSelect.appendChild(option);
+      }
+      if (moduleSelect.value) {
+        setModulePayload(moduleSelect.value);
+      }
+    }
+
+    async function sendChat() {
+      const message = chatInput.value.trim();
+      if (!message) return;
+      chatSend.disabled = true;
+      addBubble("user", message);
+      chatState.messages.push({ role: "user", content: message });
+      chatInput.value = "";
+
+      try {
+        const response = await fetch("/v1/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "foldseek-search-agent",
+            messages: chatState.messages,
+            reasoning_context: chatState.reasoningContext
+          })
+        });
+        const payload = await response.json();
+        const reply = payload?.choices?.[0]?.message?.content || JSON.stringify(payload, null, 2);
+        addBubble("assistant", reply);
+        chatState.messages.push({ role: "assistant", content: reply });
+        chatState.reasoningContext = payload.reasoning_context || null;
+      } catch (error) {
+        addBubble("assistant", `请求失败: ${error}`);
+      } finally {
+        chatSend.disabled = false;
+      }
+    }
+
+    async function runModule() {
+      moduleRun.disabled = true;
+      try {
+        const moduleName = moduleSelect.value;
+        const config = moduleConfig[moduleName];
+        const payload = JSON.parse(payloadEditor.value);
+        const response = await fetch(config.endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+        moduleResponse.textContent = JSON.stringify(data, null, 2);
+      } catch (error) {
+        moduleResponse.textContent = `执行失败: ${error}`;
+      } finally {
+        moduleRun.disabled = false;
+      }
+    }
+
+    chatSend.addEventListener("click", sendChat);
+    chatInput.addEventListener("keydown", (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+        sendChat();
+      }
+    });
+    chatClear.addEventListener("click", () => {
+      chatState.messages = [];
+      chatState.reasoningContext = null;
+      chatLog.innerHTML = "";
+      addBubble("assistant", "上下文已清空。现在可以开始新的 Foldseek 工作流。");
+    });
+    moduleSelect.addEventListener("change", () => setModulePayload(moduleSelect.value));
+    payloadReset.addEventListener("click", () => setModulePayload(moduleSelect.value));
+    moduleRun.addEventListener("click", runModule);
+
+    addBubble("assistant", "工作台已就绪。你可以直接用自然语言描述要执行的 Foldseek 操作，也可以在右侧精确调用模块。");
+    loadStatus().catch((error) => {
+      addBubble("assistant", `初始化失败: ${error}`);
+    });
+  </script>
+</body>
+</html>

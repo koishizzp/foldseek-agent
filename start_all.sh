@@ -67,6 +67,31 @@ wait_for_service() {
   return 1
 }
 
+discover_access_urls() {
+  local host="$1"
+  local port="$2"
+  local urls=()
+
+  if [[ "$host" != "0.0.0.0" ]]; then
+    urls+=("http://${host}:${port}")
+  fi
+
+  if command -v hostname >/dev/null 2>&1; then
+    local host_ips
+    host_ips="$(hostname -I 2>/dev/null || true)"
+    for ip in $host_ips; do
+      [[ -z "$ip" ]] && continue
+      urls+=("http://${ip}:${port}")
+    done
+  fi
+
+  if [[ ${#urls[@]} -eq 0 ]]; then
+    urls+=("${BASE_URL}")
+  fi
+
+  printf '%s\n' "${urls[@]}" | awk '!seen[$0]++'
+}
+
 EXISTING_PID="$(read_pid_file "$AGENT_PID_FILE" 2>/dev/null || true)"
 if is_running_pid "$EXISTING_PID"; then
   echo "Foldseek Agent API is already running (PID: $EXISTING_PID)"
@@ -92,3 +117,8 @@ echo "- URL:      ${BASE_URL}"
 echo "- Health:   ${BASE_URL}/health"
 echo "- Log file: ${AGENT_LOG}"
 echo "- PID file: ${AGENT_PID_FILE}"
+echo "- Browser:"
+discover_access_urls "$API_HOST" "$API_PORT" | while read -r url; do
+  [[ -z "$url" ]] && continue
+  echo "  * ${url}"
+done

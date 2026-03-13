@@ -67,6 +67,8 @@ class DummyService:
         }
 
     def format_execution_reply(self, result):
+        if result.get("module") == "createindex":
+            return "indexed"
         return f"best={result['summary']['best_target']}"
 
     def multimer_search(self, pdb_path, *, database, topk=10):
@@ -138,12 +140,28 @@ class DummyService:
     def createindex(self, target_db):
         return {"module": "createindex", "target_db": target_db}
 
+    def execute_plan(self, plan):
+        module = plan["module"]
+        params = plan["params"]
+        if module == "easy-search":
+            return self.search_structure(
+                params["pdb_path"],
+                database=params.get("database"),
+                topk=params.get("topk", 10),
+                min_tmscore=params.get("min_tmscore"),
+                max_evalue=params.get("max_evalue"),
+                min_prob=params.get("min_prob"),
+            )
+        if module == "createindex":
+            return self.createindex(params["target_db"])
+        raise AssertionError(f"unexpected module {module}")
+
 
 class DummyPlanner:
     def __init__(self, plan):
         self._plan = plan
 
-    def plan(self, message, available_databases, previous_request=None):
+    def plan(self, message, available_databases, available_modules=None, previous_request=None):
         return dict(self._plan)
 
 
@@ -166,19 +184,31 @@ def test_search_structure_endpoint(monkeypatch):
     assert payload["summary"]["best_target"] == "hitA"
 
 
+def test_home_returns_html():
+    client = TestClient(app)
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "Foldseek Agent Console" in response.text
+
+
 def test_chat_completions_execution(monkeypatch):
     monkeypatch.setattr("api.main.get_search_service", lambda: DummyService())
     monkeypatch.setattr(
         "api.main.get_search_planner",
         lambda: DummyPlanner(
             {
-                "action": "search",
-                "pdb_path": "/tmp/query.pdb",
-                "database": "afdb50",
-                "topk": 5,
-                "min_tmscore": 0.8,
-                "max_evalue": None,
-                "min_prob": None,
+                "action": "execute",
+                "module": "easy-search",
+                "params": {
+                    "pdb_path": "/tmp/query.pdb",
+                    "database": "afdb50",
+                    "topk": 5,
+                    "min_tmscore": 0.8,
+                    "max_evalue": None,
+                    "min_prob": None,
+                },
                 "needs_input": False,
                 "question": None,
             }
@@ -196,6 +226,7 @@ def test_chat_completions_execution(monkeypatch):
     assert payload["chat_mode"] == "execution"
     assert payload["best_hit"]["target"] == "hitA"
     assert payload["choices"][0]["message"]["content"] == "best=hitA"
+    assert payload["operation_plan"]["module"] == "easy-search"
 
 
 def test_chat_completions_reasoning(monkeypatch):
@@ -252,3 +283,31 @@ def test_createindex_endpoint(monkeypatch):
     assert response.status_code == 200
     payload = response.json()
     assert payload["module"] == "createindex"
+
+
+def test_chat_completions_createindex_execution(monkeypatch):
+    monkeypatch.setattr("api.main.get_search_service", lambda: DummyService())
+    monkeypatch.setattr(
+        "api.main.get_search_planner",
+        lambda: DummyPlanner(
+            {
+                "action": "execute",
+                "module": "createindex",
+                "params": {"target_db": "/tmp/db"},
+                "needs_input": False,
+                "question": None,
+            }
+        ),
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/v1/chat/completions",
+        json={"messages": [{"role": "user", "content": "为 /tmp/db 创建索引"}]},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["chat_mode"] == "execution"
+    assert payload["operation_plan"]["module"] == "createindex"
+    assert payload["choices"][0]["message"]["content"] == "indexed"

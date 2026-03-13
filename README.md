@@ -37,12 +37,13 @@ agent/
   parser.py           # 表格结果解析
   service.py          # 结构化服务层
   settings.py         # .env / 环境变量 / yaml 配置
-  planner.py          # 自然语言 -> easy-search 参数
+  planner.py          # 自然语言 -> Foldseek 模块与参数
   reasoner.py         # 检索结果追问解释
   chat.py             # OpenAI 风格 chat 辅助函数
 
 api/
   main.py             # FastAPI 应用入口
+  chat_ui.html        # 浏览器工作台页面
 
 config/
   config.yaml         # 默认服务器配置
@@ -225,7 +226,16 @@ curl -X POST http://127.0.0.1:8000/createindex \
 
 ### OpenAI 兼容聊天接口
 
-这个入口目前仍然主要围绕 `easy-search` 做自然语言编排：
+这个入口现在会优先用 LLM/启发式规则把自然语言路由到 8+1 模块中的合适操作。
+
+例如：
+
+- “用 afdb50 检索 /abs/path/query.pdb，返回前 5 个结果”
+- “为 /abs/path/db/mydb 创建索引”
+- “把 /abs/path/input_dir 做聚类”
+- “下载 afdb50 数据库到 /abs/path/db/afdb50”
+
+请求示例：
 
 ```bash
 curl -X POST http://127.0.0.1:8000/v1/chat/completions \
@@ -242,6 +252,23 @@ curl -X POST http://127.0.0.1:8000/v1/chat/completions \
 ```
 
 如果继续追问排序原因，传回上一轮的 `reasoning_context` 即可。
+
+## 浏览器工作台
+
+服务启动后，直接访问：
+
+```text
+http://服务器IP:8000/
+```
+
+页面里有两块：
+
+1. 左侧 `LLM Chat`
+   - 用自然语言调用 Foldseek 模块
+   - 搜索后继续追问时自动带上下文
+2. 右侧 `Direct Module Runner`
+   - 直接选择模块并发送 JSON
+   - 适合 `createdb`、`result2msa`、`createindex` 这种精确执行场景
 
 ## 服务器部署建议
 
@@ -275,6 +302,8 @@ curl -X POST http://127.0.0.1:8000/v1/chat/completions \
 3. 后台启动 `start_agent.sh`
 4. 写 PID 到 `logs/foldseek-agent.pid`
 5. 等待 `/health` 成功
+
+脚本现在还会尽量打印服务器可访问的 IP 地址，方便你直接从电脑浏览器打开。
 
 查看状态：
 

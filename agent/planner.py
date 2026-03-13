@@ -17,6 +17,7 @@ LOGGER = logging.getLogger(__name__)
 
 STRUCTURE_PATH_PATTERN = re.compile(r"""["']?((?:[A-Za-z]:\\|/|\.{1,2}[\\/])?[^\s"'`]+?\.(?:pdb|cif|mmcif|ent))["']?""", re.IGNORECASE)
 GENERIC_PATH_PATTERN = re.compile(r"""["']((?:[^"']*[\\/][^"']*|[^"']+\.db[^"']*))["']""")
+BARE_PATH_PATTERN = re.compile(r"""((?:[A-Za-z]:\\|/|\.{1,2}[\\/])\S+)""")
 TOPK_PATTERN = re.compile(r"""(?:top\s*|前\s*)(\d{1,3})""", re.IGNORECASE)
 FLOAT_PATTERN = r"""([0-9]*\.?[0-9]+(?:e[-+]?\d+)?)"""
 TM_PATTERN = re.compile(rf"""tm(?:-?score)?\s*(?:>=|>|至少|不低于)\s*{FLOAT_PATTERN}""", re.IGNORECASE)
@@ -51,6 +52,7 @@ def _extract_structure_paths(message: str) -> list[str]:
 
 def _extract_generic_paths(message: str) -> list[str]:
     values = [item.group(1).strip() for item in GENERIC_PATH_PATTERN.finditer(message)]
+    values.extend(item.group(1).strip().rstrip(".,);") for item in BARE_PATH_PATTERN.finditer(message))
     values.extend(_extract_structure_paths(message))
     deduped: list[str] = []
     seen: set[str] = set()

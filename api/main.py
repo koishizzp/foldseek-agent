@@ -1,10 +1,13 @@
 """REST and OpenAI-compatible chat API for Foldseek Agent."""
 from __future__ import annotations
 
+from functools import lru_cache
 import logging
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 from agent.chat import (
@@ -22,7 +25,12 @@ from agent.settings import get_settings
 
 logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger(__name__)
-app = FastAPI(title="Foldseek Agent", version="1.1.0")
+app = FastAPI(title="Foldseek Agent", version="1.2.0")
+
+
+@lru_cache(maxsize=1)
+def load_chat_ui() -> str:
+    return Path(__file__).with_name("chat_ui.html").read_text(encoding="utf-8")
 
 
 class SearchRequest(BaseModel):
@@ -118,9 +126,14 @@ def get_result_reasoner() -> ResultReasoner:
     return ResultReasoner(get_settings())
 
 
-@app.get("/")
-def home() -> dict[str, str]:
-    return {"message": "Foldseek Agent API is running"}
+@app.get("/", response_class=HTMLResponse)
+def home() -> str:
+    return load_chat_ui()
+
+
+@app.get("/chat", response_class=HTMLResponse)
+def chat_page() -> str:
+    return load_chat_ui()
 
 
 @app.get("/health")
@@ -296,53 +309,68 @@ def chat_completions(req: ChatCompletionRequest) -> dict[str, Any]:
     if is_reasoning_query(content):
         if latest_result:
             reasoner = get_result_reasoner()
+            current_mode = str(req.reasoning_context.get("current_mode") if isinstance(req.reasoning_context, dict) else "search")
             reply = reasoner.reply(
                 message=content,
                 latest_result=latest_result,
                 conversation=[item.model_dump() for item in req.messages],
-                current_mode="search",
+                current_mode=current_mode,
                 previous_best_target=previous_best_target,
             )
             extra = extras_from_latest_result(latest_result)
             extra["chat_mode"] = "reasoning"
-            extra["reasoning_context"] = build_reasoning_context("reasoning", latest_result, previous_best_target)
+            extra["reasoning_context"] = build_reasoning_context(
+                "reasoning",
+                latest_result,
+                previous_best_target,
+                current_mode=current_mode,
+            )
             return build_chat_completion(reply, extra=extra)
 
         return build_chat_completion(
-            "Run a Foldseek search first, or attach latest_result / reasoning_context for ranking analysis.",
+            "请先执行一次 Foldseek 操作，或在请求里附带 latest_result / reasoning_context 之后再追问。",
             extra={
                 "chat_mode": "reasoning",
-                "reasoning_context": build_reasoning_context("reasoning", None, previous_best_target),
+                "reasoning_context": build_reasoning_context("reasoning", None, previous_best_target, current_mode="search"),
             },
         )
 
     planner = get_search_planner()
     service = get_search_service()
     previous_request = latest_result.get("request") if isinstance(latest_result.get("request"), dict) else {}
-    plan = planner.plan(content, service.available_databases(), previous_request=previous_request)
-    if plan.get("needs_input") or not plan.get("pdb_path"):
+    plan = planner.plan(
+        content,
+        service.available_databases(),
+        available_modules=service.available_modules(),
+        previous_request=previous_request,
+    )
+    module = str(plan.get("module") or "easy-search")
+
+    if plan.get("needs_input"):
         return build_chat_completion(
-            str(plan.get("question") or "Provide a structure file path before running Foldseek search."),
+            str(plan.get("question") or "请先补充执行所需的输入参数。"),
             extra={
                 "chat_mode": "execution",
-                "search_request": plan,
-                "reasoning_context": build_reasoning_context("execution", latest_result, previous_best_target),
+                "operation_plan": plan,
+                "reasoning_context": build_reasoning_context(
+                    "execution",
+                    latest_result,
+                    previous_best_target,
+                    current_mode=module,
+                ),
             },
         )
 
-    result = _wrap(
-        lambda: service.search_structure(
-            plan["pdb_path"],
-            database=plan.get("database"),
-            topk=int(plan.get("topk") or 10),
-            min_tmscore=plan.get("min_tmscore"),
-            max_evalue=plan.get("max_evalue"),
-            min_prob=plan.get("min_prob"),
-        )
-    )
+    result = _wrap(lambda: service.execute_plan(plan))
     previous_target = extras_from_latest_result(latest_result).get("best_hit", {}).get("target", previous_best_target)
     extra = extras_from_latest_result(result)
     extra["chat_mode"] = "execution"
-    extra["search_result"] = result
-    extra["reasoning_context"] = build_reasoning_context("execution", result, str(previous_target or ""))
+    extra["operation_plan"] = plan
+    extra["operation_result"] = result
+    extra["reasoning_context"] = build_reasoning_context(
+        "execution",
+        result,
+        str(previous_target or ""),
+        current_mode=module,
+    )
     return build_chat_completion(service.format_execution_reply(result), extra=extra)
