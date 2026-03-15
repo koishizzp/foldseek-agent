@@ -10,7 +10,7 @@ if [[ -f ".env" ]]; then
   set +a
 fi
 
-API_PORT="${FOLDSEEK_AGENT_API_PORT:-8000}"
+API_PORT="${FOLDSEEK_AGENT_API_PORT:-8100}"
 BASE_URL="${FOLDSEEK_AGENT_BASE_URL:-http://127.0.0.1:${API_PORT}}"
 AGENT_PID_FILE="${FOLDSEEK_AGENT_API_PID_FILE:-logs/foldseek-agent.pid}"
 AGENT_LOG="${FOLDSEEK_AGENT_API_LOG:-logs/foldseek-agent.log}"

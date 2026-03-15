@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-BASE_URL="${FOLDSEEK_AGENT_BASE_URL:-http://127.0.0.1:8000}"
+BASE_URL="${FOLDSEEK_AGENT_BASE_URL:-http://127.0.0.1:8100}"
 
 echo "[1/3] health"
 curl -fsS "${BASE_URL}/health"

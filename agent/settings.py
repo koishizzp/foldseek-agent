@@ -121,7 +121,7 @@ class Settings:
     request_timeout: int = 120
 
     api_host: str = "0.0.0.0"
-    api_port: int = 8000
+    api_port: int = 8100
     config_path: str = "config/config.yaml"
 
     foldseek_root: str | None = None

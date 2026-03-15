@@ -99,7 +99,7 @@ OPENAI_MODEL=gpt-4o-mini
 
 ```bash
 FOLDSEEK_AGENT_API_HOST=0.0.0.0
-FOLDSEEK_AGENT_API_PORT=8000
+FOLDSEEK_AGENT_API_PORT=8100
 FOLDSEEK_AGENT_CONFIG=config/config.yaml
 
 FOLDSEEK_AGENT_FOLDSEEK_ROOT=/mnt/disk3/tio_nekton4/foldseek
@@ -109,7 +109,7 @@ FOLDSEEK_AGENT_DATABASES_JSON='{"afdb50":"/mnt/disk3/tio_nekton4/foldseek/<afdb5
 FOLDSEEK_AGENT_TMP_DIR=/mnt/disk3/tio_nekton4/foldseek/tmp
 FOLDSEEK_AGENT_RESULT_DIR=/mnt/disk3/tio_nekton4/foldseek/results
 FOLDSEEK_AGENT_UPLOAD_DIR=/mnt/disk3/tio_nekton4/foldseek-agent/uploads
-FOLDSEEK_AGENT_BASE_URL=http://127.0.0.1:8000
+FOLDSEEK_AGENT_BASE_URL=http://127.0.0.1:8100
 FOLDSEEK_AGENT_API_LOG=logs/foldseek-agent.log
 FOLDSEEK_AGENT_API_PID_FILE=logs/foldseek-agent.pid
 ```
@@ -147,8 +147,10 @@ python main.py createindex /abs/path/db/mydb
 启动 API：
 
 ```bash
-uvicorn api.main:app --host 0.0.0.0 --port 8000
+uvicorn api.main:app --host 0.0.0.0 --port 8100
 ```
+
+Port note: keep Foldseek Agent on `8100` so it does not conflict with `esm3-agent`, which now reserves `8000` for its canonical Python Agent API.
 
 或者：
 
@@ -169,15 +171,15 @@ chmod +x start_all.sh stop_all.sh status_all.sh restart.sh start.sh stop.sh stat
 健康检查与状态接口：
 
 ```bash
-curl http://127.0.0.1:8000/health
-curl http://127.0.0.1:8000/ui/status
-curl http://127.0.0.1:8000/foldseek/modules
+curl http://127.0.0.1:8100/health
+curl http://127.0.0.1:8100/ui/status
+curl http://127.0.0.1:8100/foldseek/modules
 ```
 
 ### 搜索类接口
 
 ```bash
-curl -X POST http://127.0.0.1:8000/search_structure \
+curl -X POST http://127.0.0.1:8100/search_structure \
   -H "Content-Type: application/json" \
   -d '{
     "pdb_path": "/abs/path/query.pdb",
@@ -188,7 +190,7 @@ curl -X POST http://127.0.0.1:8000/search_structure \
 ```
 
 ```bash
-curl -X POST http://127.0.0.1:8000/easy_multimersearch \
+curl -X POST http://127.0.0.1:8100/easy_multimersearch \
   -H "Content-Type: application/json" \
   -d '{
     "pdb_path": "/abs/path/query_multimer.pdb",
@@ -200,31 +202,31 @@ curl -X POST http://127.0.0.1:8000/easy_multimersearch \
 ### 工具类接口
 
 ```bash
-curl -X POST http://127.0.0.1:8000/easy_cluster \
+curl -X POST http://127.0.0.1:8100/easy_cluster \
   -H "Content-Type: application/json" \
   -d '{"input_path":"/abs/path/input_dir","output_prefix":"/abs/path/out/cluster"}'
 
-curl -X POST http://127.0.0.1:8000/easy_multimercluster \
+curl -X POST http://127.0.0.1:8100/easy_multimercluster \
   -H "Content-Type: application/json" \
   -d '{"input_path":"/abs/path/input_dir","output_prefix":"/abs/path/out/mcluster"}'
 
-curl -X POST http://127.0.0.1:8000/createdb \
+curl -X POST http://127.0.0.1:8100/createdb \
   -H "Content-Type: application/json" \
   -d '{"input_path":"/abs/path/input_dir","output_db":"/abs/path/db/mydb"}'
 
-curl -X POST http://127.0.0.1:8000/databases \
+curl -X POST http://127.0.0.1:8100/databases \
   -H "Content-Type: application/json" \
   -d '{"database_name":"afdb50","output_db":"/abs/path/db/afdb50"}'
 
-curl -X POST http://127.0.0.1:8000/result2msa \
+curl -X POST http://127.0.0.1:8100/result2msa \
   -H "Content-Type: application/json" \
   -d '{"query_db":"queryDB","target_db":"targetDB","alignment_db":"alnDB","output_msa_db":"msaDB","msa_format_mode":6}'
 
-curl -X POST http://127.0.0.1:8000/aln2tmscore \
+curl -X POST http://127.0.0.1:8100/aln2tmscore \
   -H "Content-Type: application/json" \
   -d '{"query_db":"queryDB","target_db":"targetDB","alignment_db":"alnDB","output_db":"tmscoreDB"}'
 
-curl -X POST http://127.0.0.1:8000/createindex \
+curl -X POST http://127.0.0.1:8100/createindex \
   -H "Content-Type: application/json" \
   -d '{"target_db":"/abs/path/db/mydb"}'
 ```
@@ -234,7 +236,7 @@ curl -X POST http://127.0.0.1:8000/createindex \
 如果你想先把本地文件传到服务器，再把服务器路径用于聊天或模块执行，可以直接调用：
 
 ```bash
-curl -X POST http://127.0.0.1:8000/ui/upload \
+curl -X POST http://127.0.0.1:8100/ui/upload \
   -F "file=@/local/path/query.pdb"
 ```
 
@@ -263,7 +265,7 @@ curl -X POST http://127.0.0.1:8000/ui/upload \
 请求示例：
 
 ```bash
-curl -X POST http://127.0.0.1:8000/v1/chat/completions \
+curl -X POST http://127.0.0.1:8100/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "foldseek-search-agent",
@@ -283,7 +285,7 @@ curl -X POST http://127.0.0.1:8000/v1/chat/completions \
 服务启动后，直接访问：
 
 ```text
-http://服务器IP:8000/
+http://服务器IP:8100/
 ```
 
 页面里有三块：
