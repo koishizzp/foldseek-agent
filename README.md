@@ -79,9 +79,11 @@ pip install -r requirements.txt
 foldseek_root: /mnt/disk3/tio_nekton4/foldseek
 foldseek_path: foldseek
 default_database: afdb50
+database_scan_roots:
+  - /mnt/disk3/tio_nekton4/foldseek/foldseek/foldseek/databases/
 ```
 
-数据库前缀、临时目录、结果目录、上传目录，既可以在 YAML 里配置，也可以通过环境变量覆盖。
+数据库前缀、可浏览的服务器数据库目录、临时目录、结果目录、上传目录，既可以在 YAML 里配置，也可以通过环境变量覆盖。工作台会扫描 `database_scan_roots` 里的 `.dbtype` 文件，并把可用数据库前缀做成下拉框。
 
 ### 与 `esm3-agent` 复用的 LLM 变量
 
@@ -106,6 +108,7 @@ FOLDSEEK_AGENT_FOLDSEEK_ROOT=/mnt/disk3/tio_nekton4/foldseek
 FOLDSEEK_AGENT_FOLDSEEK_PATH=foldseek
 FOLDSEEK_AGENT_DEFAULT_DATABASE=afdb50
 FOLDSEEK_AGENT_DATABASES_JSON='{"afdb50":"/mnt/disk3/tio_nekton4/foldseek/<afdb50_db_path>"}'
+FOLDSEEK_AGENT_DATABASE_SCAN_ROOTS_JSON='["/mnt/disk3/tio_nekton4/foldseek/foldseek/foldseek/databases/"]'
 FOLDSEEK_AGENT_TMP_DIR=/mnt/disk3/tio_nekton4/foldseek/tmp
 FOLDSEEK_AGENT_RESULT_DIR=/mnt/disk3/tio_nekton4/foldseek/results
 FOLDSEEK_AGENT_UPLOAD_DIR=/mnt/disk3/tio_nekton4/foldseek-agent/uploads

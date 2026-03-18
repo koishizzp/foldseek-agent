@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 import logging
+import os
 from pathlib import Path
 import re
 from secrets import token_hex
@@ -30,6 +31,8 @@ logging.basicConfig(level=logging.INFO)
 LOGGER = logging.getLogger(__name__)
 app = FastAPI(title="Foldseek Agent", version="1.3.0")
 SAFE_FILENAME_PATTERN = re.compile(r"[^A-Za-z0-9._-]+")
+DATABASE_SCAN_MAX_DEPTH = 3
+DATABASE_SCAN_LIMIT = 500
 
 
 @lru_cache(maxsize=1)
@@ -162,6 +165,47 @@ def _store_upload(file: UploadFile) -> dict[str, Any]:
     }
 
 
+def _discover_database_candidates(
+    root: Path,
+    *,
+    max_depth: int = DATABASE_SCAN_MAX_DEPTH,
+    limit: int = DATABASE_SCAN_LIMIT,
+) -> list[dict[str, str]]:
+    if not root.exists() or not root.is_dir():
+        return []
+
+    results: list[dict[str, str]] = []
+    seen_paths: set[str] = set()
+    for current_root, dirnames, filenames in os.walk(root):
+        current_path = Path(current_root)
+        depth = len(current_path.relative_to(root).parts)
+        if depth >= max_depth:
+            dirnames[:] = []
+
+        for filename in filenames:
+            if not filename.endswith(".dbtype"):
+                continue
+            prefix_path = (current_path / filename).with_suffix("")
+            prefix_str = str(prefix_path)
+            if prefix_str in seen_paths:
+                continue
+
+            try:
+                label = prefix_path.relative_to(root).as_posix()
+            except ValueError:
+                label = prefix_path.name
+
+            results.append({"name": label or prefix_path.name, "path": prefix_str})
+            seen_paths.add(prefix_str)
+            if len(results) >= limit:
+                break
+
+        if len(results) >= limit:
+            break
+
+    return sorted(results, key=lambda item: item["name"])
+
+
 def _wrap(handler):
     try:
         return handler()
@@ -205,6 +249,7 @@ def ui_status() -> dict[str, Any]:
             "default_database": settings.default_database,
             "available_databases": sorted(settings.databases.keys()),
             "configured_databases": settings.databases,
+            "database_scan_roots": settings.database_scan_roots,
             "supported_modules": list(SearchService.SUPPORTED_MODULES),
             "tmp_dir": settings.tmp_dir,
             "result_dir": settings.result_dir,
@@ -216,6 +261,27 @@ def ui_status() -> dict[str, Any]:
 @app.post("/ui/upload")
 def upload_file(file: UploadFile = File(...)) -> dict[str, Any]:
     return _wrap(lambda: _store_upload(file))
+
+
+@app.get("/ui/database_candidates")
+def ui_database_candidates(root: str | None = None) -> dict[str, Any]:
+    settings = get_settings()
+    configured_roots = list(settings.database_scan_roots)
+    if not configured_roots:
+        return {"roots": [], "selected_root": None, "exists": False, "candidates": []}
+
+    selected_root = root or configured_roots[0]
+    if selected_root not in configured_roots:
+        raise HTTPException(status_code=400, detail=f"Unknown database scan root: {selected_root}")
+
+    root_path = Path(selected_root)
+    exists = root_path.exists() and root_path.is_dir()
+    return {
+        "roots": configured_roots,
+        "selected_root": selected_root,
+        "exists": exists,
+        "candidates": _discover_database_candidates(root_path) if exists else [],
+    }
 
 
 @app.get("/v1/models")

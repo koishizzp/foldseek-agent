@@ -122,7 +122,7 @@
 
     .field-grid {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
       gap: 12px;
     }
 
@@ -301,6 +301,14 @@
             <select id="database-select"></select>
           </div>
           <div class="field-stack">
+            <label class="muted" for="database-root-select">服务器数据库目录</label>
+            <select id="database-root-select"></select>
+          </div>
+          <div class="field-stack">
+            <label class="muted" for="database-discovered-select">目录内数据库</label>
+            <select id="database-discovered-select"></select>
+          </div>
+          <div class="field-stack">
             <label class="muted" for="database-custom">自定义服务器路径</label>
             <input id="database-custom" type="text" placeholder="例如 /mnt/disk3/.../foldseek_db">
           </div>
@@ -359,6 +367,8 @@
     const uploadUseModule = document.getElementById("upload-use-module");
     const uploadPath = document.getElementById("upload-path");
     const databaseSelect = document.getElementById("database-select");
+    const databaseRootSelect = document.getElementById("database-root-select");
+    const databaseDiscoveredSelect = document.getElementById("database-discovered-select");
     const databaseCustom = document.getElementById("database-custom");
     const databaseHint = document.getElementById("database-hint");
     const moduleSelect = document.getElementById("module-select");
@@ -442,6 +452,20 @@
       return databaseSelect.value || "";
     }
 
+    function syncDiscoveredDatabaseSelection() {
+      const customPath = databaseCustom.value.trim();
+      const matchesCurrentOptions = Array.from(databaseDiscoveredSelect.options).some((item) => item.value === customPath);
+      databaseDiscoveredSelect.value = matchesCurrentOptions ? customPath : "";
+    }
+
+    function setCustomDatabaseValue(path) {
+      databaseSelect.value = CUSTOM_DATABASE_VALUE;
+      databaseCustom.value = path;
+      toggleCustomDatabaseInput();
+      syncDiscoveredDatabaseSelection();
+      syncSelectedDatabaseToPayload();
+    }
+
     function addBubble(role, content) {
       const node = document.createElement("div");
       node.className = `bubble ${role}`;
@@ -474,6 +498,52 @@
         databaseCustom.placeholder = "例如 /mnt/disk3/.../foldseek_db";
       }
       renderDatabaseHint(moduleSelect.value);
+    }
+
+    function renderDiscoveredDatabaseOptions(payload) {
+      const selectedRoot = payload?.selected_root || "";
+      const candidates = Array.isArray(payload?.candidates) ? payload.candidates : [];
+
+      databaseDiscoveredSelect.innerHTML = "";
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      if (!selectedRoot) {
+        placeholder.textContent = "未配置服务器数据库目录";
+      } else if (!payload?.exists) {
+        placeholder.textContent = "所选目录不存在或当前服务不可读";
+      } else if (!candidates.length) {
+        placeholder.textContent = "该目录下未扫描到 Foldseek 数据库";
+      } else {
+        placeholder.textContent = "从目录中选择数据库";
+      }
+      databaseDiscoveredSelect.appendChild(placeholder);
+
+      for (const item of candidates) {
+        const option = document.createElement("option");
+        option.value = item.path;
+        option.textContent = item.name || item.path;
+        option.title = item.path;
+        databaseDiscoveredSelect.appendChild(option);
+      }
+
+      databaseDiscoveredSelect.disabled = !candidates.length;
+      syncDiscoveredDatabaseSelection();
+    }
+
+    async function loadDatabaseCandidates(rootPath) {
+      if (!rootPath) {
+        renderDiscoveredDatabaseOptions({ selected_root: "", exists: false, candidates: [] });
+        return;
+      }
+
+      databaseDiscoveredSelect.disabled = true;
+      databaseDiscoveredSelect.innerHTML = '<option value="">正在扫描服务器数据库...</option>';
+      try {
+        const payload = await fetch(`/ui/database_candidates?root=${encodeURIComponent(rootPath)}`).then(readJsonResponse);
+        renderDiscoveredDatabaseOptions(payload);
+      } catch (error) {
+        databaseDiscoveredSelect.innerHTML = `<option value="">扫描失败: ${error}</option>`;
+      }
     }
 
     function syncSelectedDatabaseToPayload() {
@@ -577,9 +647,13 @@
       const availableDatabases = Array.isArray(foldseekStatus?.available_databases)
         ? foldseekStatus.available_databases
         : [];
+      const databaseScanRoots = Array.isArray(foldseekStatus?.database_scan_roots)
+        ? foldseekStatus.database_scan_roots
+        : [];
       const defaultDatabase = foldseekStatus?.default_database || "";
       const currentCustom = databaseCustom.value.trim();
       const currentSelection = databaseSelect.value;
+      const currentRootSelection = databaseRootSelect.value;
 
       databaseSelect.innerHTML = "";
       for (const name of availableDatabases) {
@@ -593,6 +667,24 @@
       customOption.value = CUSTOM_DATABASE_VALUE;
       customOption.textContent = "自定义服务器路径";
       databaseSelect.appendChild(customOption);
+
+      databaseRootSelect.innerHTML = "";
+      if (!databaseScanRoots.length) {
+        const emptyRootOption = document.createElement("option");
+        emptyRootOption.value = "";
+        emptyRootOption.textContent = "未配置服务器数据库目录";
+        databaseRootSelect.appendChild(emptyRootOption);
+        databaseRootSelect.disabled = true;
+      } else {
+        databaseRootSelect.disabled = false;
+        for (const rootPath of databaseScanRoots) {
+          const option = document.createElement("option");
+          option.value = rootPath;
+          option.textContent = rootPath;
+          option.title = rootPath;
+          databaseRootSelect.appendChild(option);
+        }
+      }
 
       if (currentSelection && Array.from(databaseSelect.options).some((item) => item.value === currentSelection)) {
         databaseSelect.value = currentSelection;
@@ -608,8 +700,22 @@
         databaseCustom.value = currentCustom;
       }
 
+      if (databaseScanRoots.length) {
+        if (
+          currentRootSelection
+          && Array.from(databaseRootSelect.options).some((item) => item.value === currentRootSelection)
+        ) {
+          databaseRootSelect.value = currentRootSelection;
+        } else {
+          databaseRootSelect.value = databaseScanRoots[0];
+        }
+      }
+
       toggleCustomDatabaseInput();
       syncSelectedDatabaseToPayload();
+      loadDatabaseCandidates(databaseRootSelect.value).catch((error) => {
+        databaseDiscoveredSelect.innerHTML = `<option value="">扫描失败: ${error}</option>`;
+      });
     }
 
     async function readJsonResponse(response) {
@@ -766,14 +872,27 @@
       toggleCustomDatabaseInput();
       syncSelectedDatabaseToPayload();
     });
-    databaseCustom.addEventListener("input", syncSelectedDatabaseToPayload);
+    databaseRootSelect.addEventListener("change", () => {
+      loadDatabaseCandidates(databaseRootSelect.value).catch((error) => {
+        databaseDiscoveredSelect.innerHTML = `<option value="">扫描失败: ${error}</option>`;
+      });
+    });
+    databaseDiscoveredSelect.addEventListener("change", () => {
+      if (databaseDiscoveredSelect.value) {
+        setCustomDatabaseValue(databaseDiscoveredSelect.value);
+      }
+    });
+    databaseCustom.addEventListener("input", () => {
+      syncDiscoveredDatabaseSelection();
+      syncSelectedDatabaseToPayload();
+    });
 
     moduleSelect.addEventListener("change", () => setModulePayload(moduleSelect.value));
     payloadReset.addEventListener("click", () => setModulePayload(moduleSelect.value));
     moduleRun.addEventListener("click", runModule);
 
     populateModules(Object.keys(moduleConfig));
-    renderDatabaseControls({ available_databases: ["afdb50"], default_database: "afdb50" });
+    renderDatabaseControls({ available_databases: ["afdb50"], default_database: "afdb50", database_scan_roots: [] });
     renderUploadInfo(null);
     addBubble("assistant", "工作台已就绪。先上传文件，再用自然语言或模块面板执行 Foldseek 操作会更顺手。");
     loadStatus().catch((error) => {

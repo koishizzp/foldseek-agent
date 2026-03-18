@@ -72,6 +72,8 @@ def _load_yaml_config(path: str) -> dict[str, Any]:
 def _resolve_path(value: str | None, *, root: str | None, base_dir: Path) -> str | None:
     if value is None:
         return None
+    if value.startswith("/"):
+        return value
     candidate = Path(value)
     if candidate.is_absolute():
         return str(candidate)
@@ -84,6 +86,8 @@ def _resolve_tool_path(value: str | None, *, root: str | None) -> str | None:
     if value is None:
         return None
     if "/" not in value and "\\" not in value and not value.startswith("."):
+        return value
+    if value.startswith("/"):
         return value
     candidate = Path(value)
     if candidate.is_absolute():
@@ -111,6 +115,24 @@ def _parse_databases(
     return result
 
 
+def _parse_path_list(
+    value: Any,
+    *,
+    root: str | None,
+    base_dir: Path,
+) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    result: list[str] = []
+    for raw_path in value:
+        if not isinstance(raw_path, str):
+            continue
+        resolved = _resolve_path(raw_path, root=root, base_dir=base_dir)
+        if resolved:
+            result.append(resolved)
+    return result
+
+
 @dataclass(slots=True)
 class Settings:
     app_name: str = "Foldseek Agent"
@@ -131,6 +153,7 @@ class Settings:
     upload_dir: str = "./uploads"
     default_database: str = "afdb50"
     databases: dict[str, str] = field(default_factory=dict)
+    database_scan_roots: list[str] = field(default_factory=list)
     extra_config: dict[str, Any] = field(default_factory=dict)
 
     search_max_seqs: int = 100
@@ -156,6 +179,15 @@ class Settings:
         if raw_databases_json:
             decoded = json.loads(raw_databases_json)
             databases = _parse_databases(decoded, root=foldseek_root, base_dir=config_dir)
+        database_scan_roots = _parse_path_list(
+            yaml_config.get("database_scan_roots", []),
+            root=foldseek_root,
+            base_dir=config_dir,
+        )
+        raw_database_scan_roots_json = _to_optional_str(_env_get(data, "FOLDSEEK_AGENT_DATABASE_SCAN_ROOTS_JSON"))
+        if raw_database_scan_roots_json:
+            decoded_roots = json.loads(raw_database_scan_roots_json)
+            database_scan_roots = _parse_path_list(decoded_roots, root=foldseek_root, base_dir=config_dir)
 
         search_config = yaml_config.get("search", {}) if isinstance(yaml_config.get("search"), dict) else {}
         extra_sections = {
@@ -211,6 +243,7 @@ class Settings:
             )
             or defaults.default_database,
             databases=databases,
+            database_scan_roots=database_scan_roots,
             extra_config=extra_sections,
             search_max_seqs=_to_int(
                 _env_get(
@@ -247,6 +280,7 @@ class Settings:
             "result_dir": self.result_dir,
             "upload_dir": self.upload_dir,
             "default_database": self.default_database,
+            "database_scan_roots": self.database_scan_roots,
             "search": {
                 "max_seqs": self.search_max_seqs,
                 "evalue": self.search_evalue,

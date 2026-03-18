@@ -6,6 +6,9 @@ databases:
   afdb50: afdb50
   pdb: pdb
 
+database_scan_roots:
+  - /mnt/disk3/tio_nekton4/foldseek/foldseek/foldseek/databases/
+
 tmp_dir: tmp
 result_dir: results
 upload_dir: uploads

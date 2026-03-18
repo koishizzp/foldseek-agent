@@ -329,7 +329,11 @@ def test_modules_endpoint():
 def test_ui_status_contains_upload_dir(monkeypatch, tmp_path):
     monkeypatch.setattr(
         "api.main.get_settings",
-        lambda: Settings(upload_dir=str(tmp_path / "uploads"), databases={"afdb50": "/tmp/afdb50"}),
+        lambda: Settings(
+            upload_dir=str(tmp_path / "uploads"),
+            databases={"afdb50": "/tmp/afdb50"},
+            database_scan_roots=[str(tmp_path / "db_scan")],
+        ),
     )
     client = TestClient(app)
 
@@ -339,6 +343,48 @@ def test_ui_status_contains_upload_dir(monkeypatch, tmp_path):
     payload = response.json()
     assert payload["foldseek"]["upload_dir"] == str(tmp_path / "uploads")
     assert payload["foldseek"]["available_databases"] == ["afdb50"]
+    assert payload["foldseek"]["database_scan_roots"] == [str(tmp_path / "db_scan")]
+
+
+def test_ui_database_candidates_lists_detected_prefixes(monkeypatch, tmp_path):
+    root = tmp_path / "db_scan"
+    root.mkdir()
+    (root / "afdb50.dbtype").write_text("", encoding="utf-8")
+    nested = root / "nested"
+    nested.mkdir()
+    (nested / "pdb.dbtype").write_text("", encoding="utf-8")
+
+    monkeypatch.setattr(
+        "api.main.get_settings",
+        lambda: Settings(database_scan_roots=[str(root)]),
+    )
+    client = TestClient(app)
+
+    response = client.get("/ui/database_candidates", params={"root": str(root)})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["selected_root"] == str(root)
+    assert payload["exists"] is True
+    assert payload["candidates"] == [
+        {"name": "afdb50", "path": str(root / "afdb50")},
+        {"name": "nested/pdb", "path": str(root / "nested" / "pdb")},
+    ]
+
+
+def test_ui_database_candidates_rejects_unknown_root(monkeypatch, tmp_path):
+    allowed_root = tmp_path / "allowed"
+    allowed_root.mkdir()
+    monkeypatch.setattr(
+        "api.main.get_settings",
+        lambda: Settings(database_scan_roots=[str(allowed_root)]),
+    )
+    client = TestClient(app)
+
+    response = client.get("/ui/database_candidates", params={"root": str(tmp_path / "other")})
+
+    assert response.status_code == 400
+    assert "Unknown database scan root" in response.json()["detail"]
 
 
 def test_easy_cluster_endpoint(monkeypatch):
