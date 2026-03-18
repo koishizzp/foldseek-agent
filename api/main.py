@@ -236,26 +236,29 @@ def list_modules() -> dict[str, Any]:
 
 @app.get("/ui/status")
 def ui_status() -> dict[str, Any]:
-    settings = get_settings()
-    return {
-        "agent": {"status": "ok", "app_name": settings.app_name},
-        "llm": {
-            "configured": bool(settings.openai_api_key),
-            "model": settings.llm_model,
-            "base_url_configured": bool(settings.openai_base_url),
-        },
-        "foldseek": {
-            "binary": settings.foldseek_path,
-            "default_database": settings.default_database,
-            "available_databases": sorted(settings.databases.keys()),
-            "configured_databases": settings.databases,
-            "database_scan_roots": settings.database_scan_roots,
-            "supported_modules": list(SearchService.SUPPORTED_MODULES),
-            "tmp_dir": settings.tmp_dir,
-            "result_dir": settings.result_dir,
-            "upload_dir": settings.upload_dir,
-        },
-    }
+    def _build_payload() -> dict[str, Any]:
+        settings = get_settings()
+        return {
+            "agent": {"status": "ok", "app_name": settings.app_name},
+            "llm": {
+                "configured": bool(settings.openai_api_key),
+                "model": settings.llm_model,
+                "base_url_configured": bool(settings.openai_base_url),
+            },
+            "foldseek": {
+                "binary": settings.foldseek_path,
+                "default_database": settings.default_database,
+                "available_databases": sorted(settings.databases.keys()),
+                "configured_databases": settings.databases,
+                "database_scan_roots": settings.database_scan_roots,
+                "supported_modules": list(SearchService.SUPPORTED_MODULES),
+                "tmp_dir": settings.tmp_dir,
+                "result_dir": settings.result_dir,
+                "upload_dir": settings.upload_dir,
+            },
+        }
+
+    return _wrap(_build_payload)
 
 
 @app.post("/ui/upload")

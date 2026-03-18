@@ -387,6 +387,19 @@ def test_ui_database_candidates_rejects_unknown_root(monkeypatch, tmp_path):
     assert "Unknown database scan root" in response.json()["detail"]
 
 
+def test_ui_status_returns_error_detail_when_settings_fail(monkeypatch):
+    monkeypatch.setattr(
+        "api.main.get_settings",
+        lambda: (_ for _ in ()).throw(ValueError("bad settings")),
+    )
+    client = TestClient(app)
+
+    response = client.get("/ui/status")
+
+    assert response.status_code == 500
+    assert response.json()["detail"] == "bad settings"
+
+
 def test_easy_cluster_endpoint(monkeypatch):
     monkeypatch.setattr("api.main.get_search_service", lambda: DummyService())
     client = TestClient(app)
