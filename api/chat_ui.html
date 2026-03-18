@@ -252,6 +252,31 @@
       align-items: center;
     }
 
+    .mode-switch {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .mode-chip {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 10px 14px;
+      background: rgba(255, 255, 255, 0.72);
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    .mode-chip.active {
+      color: white;
+      border-color: transparent;
+      background: linear-gradient(135deg, var(--accent-2), #24856c);
+    }
+
+    .field-stack.hidden {
+      display: none;
+    }
+
     @media (max-width: 980px) {
       .workspace {
         grid-template-columns: 1fr;
@@ -314,6 +339,53 @@
           </div>
         </div>
         <div class="upload-path" id="database-hint">当前检索数据库: afdb50</div>
+      </div>
+
+      <div class="info-strip">
+        <div>
+          <h2>结构挖掘启动器</h2>
+          <p class="muted">把搜索类型、查询结构、数据库、topk、临时目录和结果输出先确认好，再一键执行。执行后聊天区会自动拿到结果上下文，方便继续追问“为什么第一名更好”。当前启动器直接支持服务器上的结构文件路径或上方上传得到的路径。</p>
+        </div>
+        <div class="mode-switch">
+          <button class="mode-chip active" id="search-mode-monomer" type="button" data-search-mode="easy-search">单体搜索</button>
+          <button class="mode-chip" id="search-mode-multimer" type="button" data-search-mode="easy-multimersearch">多聚体搜索</button>
+        </div>
+        <div class="field-grid">
+          <div class="field-stack">
+            <label class="muted" for="search-query-path">查询结构路径</label>
+            <input id="search-query-path" type="text" placeholder="例如 /mnt/disk3/.../query.pdb">
+          </div>
+          <div class="field-stack">
+            <label class="muted" for="search-topk">TopK</label>
+            <input id="search-topk" type="number" min="1" max="200" value="5">
+          </div>
+          <div class="field-stack">
+            <label class="muted" for="search-output-path">结果 JSON 输出</label>
+            <input id="search-output-path" type="text" placeholder="可选，例如 /mnt/disk3/.../search_hits.json">
+          </div>
+          <div class="field-stack">
+            <label class="muted" for="search-tmp-dir">临时目录</label>
+            <input id="search-tmp-dir" type="text" placeholder="可选，留空则使用服务默认 tmp_dir">
+          </div>
+          <div class="field-stack" id="search-filter-tm-row">
+            <label class="muted" for="search-min-tmscore">最低 TM-score</label>
+            <input id="search-min-tmscore" type="number" min="0" max="1" step="0.01" placeholder="可选，例如 0.6">
+          </div>
+          <div class="field-stack" id="search-filter-evalue-row">
+            <label class="muted" for="search-max-evalue">最高 E-value</label>
+            <input id="search-max-evalue" type="text" placeholder="可选，例如 1e-3">
+          </div>
+          <div class="field-stack" id="search-filter-prob-row">
+            <label class="muted" for="search-min-prob">最低 Prob</label>
+            <input id="search-min-prob" type="number" min="0" max="1" step="0.01" placeholder="可选，例如 0.8">
+          </div>
+        </div>
+        <div class="actions">
+          <button class="secondary" id="search-use-upload" type="button">使用最近上传文件</button>
+          <button class="secondary" id="search-fill-chat" type="button">生成聊天请求</button>
+          <button id="search-run" type="button">一键执行结构挖掘</button>
+        </div>
+        <div class="upload-path" id="search-launch-hint">当前预设: 单体搜索，topk=5，等待填写查询结构路径。</div>
       </div>
     </section>
 
@@ -379,8 +451,24 @@
     const moduleResponse = document.getElementById("module-response");
     const statusGrid = document.getElementById("status-grid");
     const moduleTags = document.getElementById("module-tags");
+    const searchModeButtons = Array.from(document.querySelectorAll("[data-search-mode]"));
+    const searchQueryPath = document.getElementById("search-query-path");
+    const searchTopk = document.getElementById("search-topk");
+    const searchOutputPath = document.getElementById("search-output-path");
+    const searchTmpDir = document.getElementById("search-tmp-dir");
+    const searchMinTmScore = document.getElementById("search-min-tmscore");
+    const searchMaxEvalue = document.getElementById("search-max-evalue");
+    const searchMinProb = document.getElementById("search-min-prob");
+    const searchFilterTmRow = document.getElementById("search-filter-tm-row");
+    const searchFilterEvalueRow = document.getElementById("search-filter-evalue-row");
+    const searchFilterProbRow = document.getElementById("search-filter-prob-row");
+    const searchUseUpload = document.getElementById("search-use-upload");
+    const searchFillChat = document.getElementById("search-fill-chat");
+    const searchRun = document.getElementById("search-run");
+    const searchLaunchHint = document.getElementById("search-launch-hint");
 
     const CUSTOM_DATABASE_VALUE = "__custom__";
+    let currentSearchMode = "easy-search";
 
     const moduleConfig = {
       "easy-search": {
@@ -466,6 +554,342 @@
       syncSelectedDatabaseToPayload();
     }
 
+    /*
+
+    function getSearchModeLabel(mode) {
+      return mode === "easy-multimersearch" ? "多聚体搜索" : "单体搜索";
+    }
+
+    function updateSearchModeButtons() {
+      for (const button of searchModeButtons) {
+        button.classList.toggle("active", button.dataset.searchMode === currentSearchMode);
+      }
+    }
+
+    function toggleSearchFilterFields() {
+      const showMonomerFilters = currentSearchMode === "easy-search";
+      searchFilterTmRow.classList.toggle("hidden", !showMonomerFilters);
+      searchFilterEvalueRow.classList.toggle("hidden", !showMonomerFilters);
+      searchFilterProbRow.classList.toggle("hidden", !showMonomerFilters);
+      searchMinTmScore.disabled = !showMonomerFilters;
+      searchMaxEvalue.disabled = !showMonomerFilters;
+      searchMinProb.disabled = !showMonomerFilters;
+    }
+
+    function renderSearchLaunchHint() {
+      const summary = [
+        `当前预设: ${getSearchModeLabel(currentSearchMode)}`,
+        `database=${getSelectedDatabase() || "未选择"}`,
+        `topk=${searchTopk.value || 5}`,
+        `query=${searchQueryPath.value.trim() || "待填写"}`,
+      ];
+      if (searchTmpDir.value.trim()) {
+        summary.push(`tmp_dir=${searchTmpDir.value.trim()}`);
+      }
+      if (searchOutputPath.value.trim()) {
+        summary.push(`output=${searchOutputPath.value.trim()}`);
+      }
+      if (currentSearchMode === "easy-search") {
+        if (searchMinTmScore.value.trim()) {
+          summary.push(`min_tmscore=${searchMinTmScore.value.trim()}`);
+        }
+        if (searchMaxEvalue.value.trim()) {
+          summary.push(`max_evalue=${searchMaxEvalue.value.trim()}`);
+        }
+        if (searchMinProb.value.trim()) {
+          summary.push(`min_prob=${searchMinProb.value.trim()}`);
+        }
+      }
+      searchLaunchHint.textContent = summary.join(" | ");
+    }
+
+    function setSearchMode(mode) {
+      currentSearchMode = mode === "easy-multimersearch" ? "easy-multimersearch" : "easy-search";
+      updateSearchModeButtons();
+      toggleSearchFilterFields();
+      renderSearchLaunchHint();
+    }
+
+    function parseOptionalNumber(value, fieldLabel) {
+      const raw = String(value || "").trim();
+      if (!raw) {
+        return null;
+      }
+      const parsed = Number(raw);
+      if (!Number.isFinite(parsed)) {
+        throw new Error(`${fieldLabel} 不是合法数字。`);
+      }
+      return parsed;
+    }
+
+    function buildSearchLauncherPayload() {
+      const pdbPath = searchQueryPath.value.trim();
+      if (!pdbPath) {
+        throw new Error("请先填写查询结构路径，或使用最近上传文件。");
+      }
+
+      const database = getSelectedDatabase();
+      if (!database) {
+        throw new Error("请先选择检索数据库。");
+      }
+
+      const topk = Number.parseInt(String(searchTopk.value || "").trim(), 10);
+      if (!Number.isInteger(topk) || topk < 1 || topk > 200) {
+        throw new Error("TopK 必须是 1 到 200 之间的整数。");
+      }
+
+      const payload = {
+        pdb_path: pdbPath,
+        database,
+        topk,
+      };
+
+      if (searchTmpDir.value.trim()) {
+        payload.tmp_dir = searchTmpDir.value.trim();
+      }
+      if (searchOutputPath.value.trim()) {
+        payload.output_path = searchOutputPath.value.trim();
+      }
+
+      if (currentSearchMode === "easy-search") {
+        const minTmScore = parseOptionalNumber(searchMinTmScore.value, "最低 TM-score");
+        const maxEvalue = parseOptionalNumber(searchMaxEvalue.value, "最高 E-value");
+        const minProb = parseOptionalNumber(searchMinProb.value, "最低 Prob");
+        if (minTmScore !== null) {
+          payload.min_tmscore = minTmScore;
+        }
+        if (maxEvalue !== null) {
+          payload.max_evalue = maxEvalue;
+        }
+        if (minProb !== null) {
+          payload.min_prob = minProb;
+        }
+      }
+
+      return payload;
+    }
+
+    function buildSearchLauncherPrompt(payload) {
+      const items = [
+        `请执行 ${currentSearchMode}`,
+        `pdb_path=${payload.pdb_path}`,
+        `database=${payload.database}`,
+        `topk=${payload.topk}`,
+      ];
+      if (payload.tmp_dir) {
+        items.push(`tmp_dir=${payload.tmp_dir}`);
+      }
+      if (payload.output_path) {
+        items.push(`output=${payload.output_path}`);
+      }
+      if (payload.min_tmscore !== undefined) {
+        items.push(`min_tmscore=${payload.min_tmscore}`);
+      }
+      if (payload.max_evalue !== undefined) {
+        items.push(`max_evalue=${payload.max_evalue}`);
+      }
+      if (payload.min_prob !== undefined) {
+        items.push(`min_prob=${payload.min_prob}`);
+      }
+      return items.join("，");
+    }
+
+    function applyStructuredSearchResult(result) {
+      const bestHit = Array.isArray(result?.hits) && result.hits.length ? result.hits[0] : null;
+      let reply;
+      if (currentSearchMode === "easy-multimersearch") {
+        reply = bestHit
+          ? `已按预设执行多聚体搜索，最佳命中是 ${bestHit.target}。complexqTM=${Number(bestHit.complexqtmscore || 0).toFixed(4)}，prob=${Number(bestHit.prob || 0).toFixed(4)}。`
+          : "已按预设执行多聚体搜索，但当前没有保留下来的命中。";
+      } else {
+        reply = bestHit
+          ? `已按预设执行单体搜索，最佳命中是 ${bestHit.target}。TM-score=${Number(bestHit.tmscore || 0).toFixed(4)}，prob=${Number(bestHit.prob || 0).toFixed(4)}。`
+          : "已按预设执行单体搜索，但当前没有保留下来的命中。";
+      }
+      if (result?.output_path) {
+        reply += `\n结果 JSON: ${result.output_path}`;
+      }
+      addBubble("assistant", reply);
+      chatState.messages.push({ role: "assistant", content: reply });
+      const bestTarget = result?.summary?.best_target || bestHit?.target || "";
+      chatState.reasoningContext = {
+        version: 1,
+        chat_mode: "execution",
+        current_mode: currentSearchMode,
+        latest_result: result,
+        previous_best_target: bestTarget,
+        latest_best_target: bestTarget,
+      };
+    }
+
+    */
+
+    function getSearchModeLabel(mode) {
+      return mode === "easy-multimersearch" ? "Multimer Search" : "Monomer Search";
+    }
+
+    function updateSearchModeButtons() {
+      for (const button of searchModeButtons) {
+        button.classList.toggle("active", button.dataset.searchMode === currentSearchMode);
+      }
+    }
+
+    function toggleSearchFilterFields() {
+      const showMonomerFilters = currentSearchMode === "easy-search";
+      searchFilterTmRow.classList.toggle("hidden", !showMonomerFilters);
+      searchFilterEvalueRow.classList.toggle("hidden", !showMonomerFilters);
+      searchFilterProbRow.classList.toggle("hidden", !showMonomerFilters);
+      searchMinTmScore.disabled = !showMonomerFilters;
+      searchMaxEvalue.disabled = !showMonomerFilters;
+      searchMinProb.disabled = !showMonomerFilters;
+    }
+
+    function renderSearchLaunchHint() {
+      const summary = [
+        `Preset: ${getSearchModeLabel(currentSearchMode)}`,
+        `database=${getSelectedDatabase() || "unset"}`,
+        `topk=${searchTopk.value || 5}`,
+        `query=${searchQueryPath.value.trim() || "pending"}`,
+      ];
+      if (searchTmpDir.value.trim()) {
+        summary.push(`tmp_dir=${searchTmpDir.value.trim()}`);
+      }
+      if (searchOutputPath.value.trim()) {
+        summary.push(`output=${searchOutputPath.value.trim()}`);
+      }
+      if (currentSearchMode === "easy-search") {
+        if (searchMinTmScore.value.trim()) {
+          summary.push(`min_tmscore=${searchMinTmScore.value.trim()}`);
+        }
+        if (searchMaxEvalue.value.trim()) {
+          summary.push(`max_evalue=${searchMaxEvalue.value.trim()}`);
+        }
+        if (searchMinProb.value.trim()) {
+          summary.push(`min_prob=${searchMinProb.value.trim()}`);
+        }
+      }
+      searchLaunchHint.textContent = summary.join(" | ");
+    }
+
+    function setSearchMode(mode) {
+      currentSearchMode = mode === "easy-multimersearch" ? "easy-multimersearch" : "easy-search";
+      updateSearchModeButtons();
+      toggleSearchFilterFields();
+      renderSearchLaunchHint();
+    }
+
+    function parseOptionalNumber(value, fieldLabel) {
+      const raw = String(value || "").trim();
+      if (!raw) {
+        return null;
+      }
+      const parsed = Number(raw);
+      if (!Number.isFinite(parsed)) {
+        throw new Error(`${fieldLabel} is not a valid number.`);
+      }
+      return parsed;
+    }
+
+    function buildSearchLauncherPayload() {
+      const pdbPath = searchQueryPath.value.trim();
+      if (!pdbPath) {
+        throw new Error("Please provide a query structure path or use the latest uploaded file.");
+      }
+
+      const database = getSelectedDatabase();
+      if (!database) {
+        throw new Error("Please choose a search database first.");
+      }
+
+      const topk = Number.parseInt(String(searchTopk.value || "").trim(), 10);
+      if (!Number.isInteger(topk) || topk < 1 || topk > 200) {
+        throw new Error("TopK must be an integer between 1 and 200.");
+      }
+
+      const payload = {
+        pdb_path: pdbPath,
+        database,
+        topk,
+      };
+
+      if (searchTmpDir.value.trim()) {
+        payload.tmp_dir = searchTmpDir.value.trim();
+      }
+      if (searchOutputPath.value.trim()) {
+        payload.output_path = searchOutputPath.value.trim();
+      }
+
+      if (currentSearchMode === "easy-search") {
+        const minTmScore = parseOptionalNumber(searchMinTmScore.value, "min_tmscore");
+        const maxEvalue = parseOptionalNumber(searchMaxEvalue.value, "max_evalue");
+        const minProb = parseOptionalNumber(searchMinProb.value, "min_prob");
+        if (minTmScore !== null) {
+          payload.min_tmscore = minTmScore;
+        }
+        if (maxEvalue !== null) {
+          payload.max_evalue = maxEvalue;
+        }
+        if (minProb !== null) {
+          payload.min_prob = minProb;
+        }
+      }
+
+      return payload;
+    }
+
+    function buildSearchLauncherPrompt(payload) {
+      const items = [
+        `Run ${currentSearchMode}`,
+        `pdb_path=${payload.pdb_path}`,
+        `database=${payload.database}`,
+        `topk=${payload.topk}`,
+      ];
+      if (payload.tmp_dir) {
+        items.push(`tmp_dir=${payload.tmp_dir}`);
+      }
+      if (payload.output_path) {
+        items.push(`output=${payload.output_path}`);
+      }
+      if (payload.min_tmscore !== undefined) {
+        items.push(`min_tmscore=${payload.min_tmscore}`);
+      }
+      if (payload.max_evalue !== undefined) {
+        items.push(`max_evalue=${payload.max_evalue}`);
+      }
+      if (payload.min_prob !== undefined) {
+        items.push(`min_prob=${payload.min_prob}`);
+      }
+      return items.join(", ");
+    }
+
+    function applyStructuredSearchResult(result) {
+      const bestHit = Array.isArray(result?.hits) && result.hits.length ? result.hits[0] : null;
+      let reply;
+      if (currentSearchMode === "easy-multimersearch") {
+        reply = bestHit
+          ? `Preset multimer search finished. Best hit: ${bestHit.target}. complexqTM=${Number(bestHit.complexqtmscore || 0).toFixed(4)}, prob=${Number(bestHit.prob || 0).toFixed(4)}.`
+          : "Preset multimer search finished, but no hits were retained.";
+      } else {
+        reply = bestHit
+          ? `Preset monomer search finished. Best hit: ${bestHit.target}. TM-score=${Number(bestHit.tmscore || 0).toFixed(4)}, prob=${Number(bestHit.prob || 0).toFixed(4)}.`
+          : "Preset monomer search finished, but no hits were retained.";
+      }
+      if (result?.output_path) {
+        reply += `\nResult JSON: ${result.output_path}`;
+      }
+      addBubble("assistant", reply);
+      chatState.messages.push({ role: "assistant", content: reply });
+      const bestTarget = result?.summary?.best_target || bestHit?.target || "";
+      chatState.reasoningContext = {
+        version: 1,
+        chat_mode: "execution",
+        current_mode: currentSearchMode,
+        latest_result: result,
+        previous_best_target: bestTarget,
+        latest_best_target: bestTarget,
+      };
+    }
+
     function addBubble(role, content) {
       const node = document.createElement("div");
       node.className = `bubble ${role}`;
@@ -548,6 +972,7 @@
 
     function syncSelectedDatabaseToPayload() {
       renderDatabaseHint(moduleSelect.value);
+      renderSearchLaunchHint();
       if (!moduleSupportsDatabase(moduleSelect.value)) {
         return;
       }
@@ -614,6 +1039,45 @@
       const prefix = chatInput.value.trim() ? `${chatInput.value.trim()} ` : "";
       chatInput.value = `${prefix}${latestUpload.path}`;
       chatInput.focus();
+    }
+
+    function useLatestUploadForSearch() {
+      if (!latestUpload) {
+        addBubble("assistant", "还没有上传文件，无法填入查询结构路径。");
+        return;
+      }
+      searchQueryPath.value = latestUpload.path;
+      renderSearchLaunchHint();
+    }
+
+    function fillSearchPromptIntoChat() {
+      try {
+        const payload = buildSearchLauncherPayload();
+        chatInput.value = buildSearchLauncherPrompt(payload);
+        chatInput.focus();
+      } catch (error) {
+        addBubble("assistant", `预设未完成: ${error}`);
+      }
+    }
+
+    async function runStructuredSearch() {
+      searchRun.disabled = true;
+      try {
+        const payload = buildSearchLauncherPayload();
+        const endpoint = currentSearchMode === "easy-multimersearch" ? "/easy_multimersearch" : "/search_structure";
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const result = await readJsonResponse(response);
+        moduleResponse.textContent = JSON.stringify(result, null, 2);
+        applyStructuredSearchResult(result);
+      } catch (error) {
+        addBubble("assistant", `结构挖掘执行失败: ${error}`);
+      } finally {
+        searchRun.disabled = false;
+      }
     }
 
     function populateModules(moduleNames) {
@@ -713,6 +1177,7 @@
 
       toggleCustomDatabaseInput();
       syncSelectedDatabaseToPayload();
+      renderSearchLaunchHint();
       loadDatabaseCandidates(databaseRootSelect.value).catch((error) => {
         databaseDiscoveredSelect.innerHTML = `<option value="">扫描失败: ${error}</option>`;
       });
@@ -750,6 +1215,12 @@
       const aliases = Array.isArray(status.foldseek?.available_databases)
         ? status.foldseek.available_databases
         : [];
+      if (!searchTmpDir.value && status.foldseek?.tmp_dir) {
+        searchTmpDir.placeholder = `留空则使用默认: ${status.foldseek.tmp_dir}`;
+      }
+      if (!searchOutputPath.value && status.foldseek?.result_dir) {
+        searchOutputPath.placeholder = `可选，例如 ${status.foldseek.result_dir}/search_hits.json`;
+      }
 
       statusGrid.innerHTML = "";
       const cards = [
@@ -785,6 +1256,10 @@
         latestUpload = payload;
         renderUploadInfo(payload);
         injectUploadedPathIntoPayload();
+        if (!searchQueryPath.value.trim()) {
+          searchQueryPath.value = payload.path;
+        }
+        renderSearchLaunchHint();
       } catch (error) {
         renderUploadInfo({ filename: "上传失败", content_type: "-", size: 0, path: String(error) });
       } finally {
@@ -867,6 +1342,21 @@
     uploadSend.addEventListener("click", uploadFile);
     uploadUseChat.addEventListener("click", injectUploadedPathIntoChat);
     uploadUseModule.addEventListener("click", injectUploadedPathIntoPayload);
+    searchUseUpload.addEventListener("click", useLatestUploadForSearch);
+    searchFillChat.addEventListener("click", fillSearchPromptIntoChat);
+    searchRun.addEventListener("click", runStructuredSearch);
+    for (const button of searchModeButtons) {
+      button.addEventListener("click", () => setSearchMode(button.dataset.searchMode));
+    }
+    [
+      searchQueryPath,
+      searchTopk,
+      searchOutputPath,
+      searchTmpDir,
+      searchMinTmScore,
+      searchMaxEvalue,
+      searchMinProb,
+    ].forEach((input) => input.addEventListener("input", renderSearchLaunchHint));
 
     databaseSelect.addEventListener("change", () => {
       toggleCustomDatabaseInput();
@@ -892,8 +1382,10 @@
     moduleRun.addEventListener("click", runModule);
 
     populateModules(Object.keys(moduleConfig));
+    setSearchMode("easy-search");
     renderDatabaseControls({ available_databases: ["afdb50"], default_database: "afdb50", database_scan_roots: [] });
     renderUploadInfo(null);
+    renderSearchLaunchHint();
     addBubble("assistant", "工作台已就绪。先上传文件，再用自然语言或模块面板执行 Foldseek 操作会更顺手。");
     loadStatus().catch((error) => {
       addBubble("assistant", `初始化失败: ${error}`);

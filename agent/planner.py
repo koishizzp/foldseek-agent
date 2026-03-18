@@ -27,6 +27,9 @@ TM_PATTERN = re.compile(rf"""tm(?:-?score)?\s*(?:>=|>|至少|不低于)\s*{FLOAT
 EVALUE_PATTERN = re.compile(rf"""e-?value\s*(?:<=|<|不高于|至多)\s*{FLOAT_PATTERN}""", re.IGNORECASE)
 PROB_PATTERN = re.compile(rf"""prob(?:ability)?\s*(?:>=|>|至少|不低于)\s*{FLOAT_PATTERN}""", re.IGNORECASE)
 
+TMP_DIR_PATTERN = re.compile(r"""(?:tmp_dir|tmp)\s*[:=]\s*["']?([^\s"'`,;]+)""", re.IGNORECASE)
+OUTPUT_PATH_PATTERN = re.compile(r"""(?:output|output_path|json_out|json_output)\s*[:=]\s*["']?([^\s"'`,;]+)""", re.IGNORECASE)
+
 MODULE_HINTS = {
     "easy-multimercluster": (
         "multimercluster",
@@ -99,6 +102,14 @@ def _parse_threshold(pattern: re.Pattern[str], message: str) -> float | None:
         return float(match.group(1))
     except ValueError:
         return None
+
+
+def _extract_named_path(pattern: re.Pattern[str], message: str) -> str | None:
+    match = pattern.search(message)
+    if not match:
+        return None
+    value = str(match.group(1) or "").strip()
+    return value or None
 
 
 class SearchPlanner:
@@ -204,6 +215,8 @@ class SearchPlanner:
         module = self._infer_module(message, available_modules)
         generic_paths = _extract_generic_paths(message)
         structure_paths = _extract_structure_paths(message)
+        requested_tmp_dir = _extract_named_path(TMP_DIR_PATTERN, message)
+        requested_output_path = _extract_named_path(OUTPUT_PATH_PATTERN, message)
         database = (
             preferred_database
             or self._infer_database(message, available_databases)
@@ -228,6 +241,8 @@ class SearchPlanner:
                 "min_tmscore": _parse_threshold(TM_PATTERN, message),
                 "max_evalue": _parse_threshold(EVALUE_PATTERN, message),
                 "min_prob": _parse_threshold(PROB_PATTERN, message),
+                "tmp_dir": requested_tmp_dir or previous_request.get("tmp_dir"),
+                "output_path": requested_output_path or previous_request.get("output_path"),
             }
             if not pdb_path:
                 question = "请提供要检索的结构文件路径，例如 /path/to/query.pdb。"
@@ -236,7 +251,13 @@ class SearchPlanner:
 
         elif module == "easy-multimersearch":
             pdb_path = structure_paths[0] if structure_paths else previous_request.get("pdb_path")
-            params = {"pdb_path": pdb_path, "database": database, "topk": topk}
+            params = {
+                "pdb_path": pdb_path,
+                "database": database,
+                "topk": topk,
+                "tmp_dir": requested_tmp_dir or previous_request.get("tmp_dir"),
+                "output_path": requested_output_path or previous_request.get("output_path"),
+            }
             if not pdb_path:
                 question = "请提供复合体结构文件路径，例如 /path/to/query_multimer.pdb。"
             elif not database:
@@ -351,6 +372,8 @@ class SearchPlanner:
                 or self._default_database(available_databases)
             )
             params["database"] = database
+            params["tmp_dir"] = str(params.get("tmp_dir") or fallback["params"].get("tmp_dir") or "").strip() or None
+            params["output_path"] = str(params.get("output_path") or fallback["params"].get("output_path") or "").strip() or None
             try:
                 params["topk"] = max(1, min(int(params.get("topk", fallback["params"].get("topk", 10))), 200))
             except (TypeError, ValueError):

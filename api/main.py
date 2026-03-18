@@ -47,6 +47,8 @@ class SearchRequest(BaseModel):
     min_tmscore: float | None = Field(default=None, ge=0)
     max_evalue: float | None = Field(default=None, ge=0)
     min_prob: float | None = Field(default=None, ge=0)
+    tmp_dir: str | None = None
+    output_path: str | None = None
 
 
 class EasyClusterRequest(BaseModel):
@@ -60,6 +62,8 @@ class EasyMultimerSearchRequest(BaseModel):
     pdb_path: str
     database: str
     topk: int = Field(default=10, ge=1, le=200)
+    tmp_dir: str | None = None
+    output_path: str | None = None
 
 
 class EasyMultimerClusterRequest(BaseModel):
@@ -303,6 +307,8 @@ def search_structure(req: SearchRequest) -> dict[str, Any]:
             min_tmscore=req.min_tmscore,
             max_evalue=req.max_evalue,
             min_prob=req.min_prob,
+            tmp_dir=req.tmp_dir,
+            output_path=req.output_path,
         )
     )
 
@@ -323,7 +329,15 @@ def easy_cluster(req: EasyClusterRequest) -> dict[str, Any]:
 @app.post("/easy_multimersearch")
 def easy_multimersearch(req: EasyMultimerSearchRequest) -> dict[str, Any]:
     service = get_search_service()
-    return _wrap(lambda: service.multimer_search(req.pdb_path, database=req.database, topk=req.topk))
+    return _wrap(
+        lambda: service.multimer_search(
+            req.pdb_path,
+            database=req.database,
+            topk=req.topk,
+            tmp_dir=req.tmp_dir,
+            output_path=req.output_path,
+        )
+    )
 
 
 @app.post("/easy_multimercluster")

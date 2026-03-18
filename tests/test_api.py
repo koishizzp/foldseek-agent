@@ -30,8 +30,10 @@ class DummyService:
         min_tmscore=None,
         max_evalue=None,
         min_prob=None,
+        tmp_dir=None,
+        output_path=None,
     ):
-        return {
+        result = {
             "module": "easy-search",
             "request": {
                 "pdb_path": pdb_path,
@@ -40,6 +42,7 @@ class DummyService:
                 "min_tmscore": min_tmscore,
                 "max_evalue": max_evalue,
                 "min_prob": min_prob,
+                "tmp_dir": tmp_dir or "/tmp",
             },
             "hits": [
                 {
@@ -67,19 +70,25 @@ class DummyService:
                 },
             },
         }
+        if output_path:
+            result["output_path"] = output_path
+        return result
 
     def format_execution_reply(self, result):
         if result.get("module") == "createindex":
             return "indexed"
         return f"best={result['summary']['best_target']}"
 
-    def multimer_search(self, pdb_path, *, database, topk=10):
-        return {
+    def multimer_search(self, pdb_path, *, database, topk=10, tmp_dir=None, output_path=None):
+        result = {
             "module": "easy-multimersearch",
-            "request": {"pdb_path": pdb_path, "database": database, "topk": topk},
+            "request": {"pdb_path": pdb_path, "database": database, "topk": topk, "tmp_dir": tmp_dir or "/tmp"},
             "hits": [{"query": "q1", "target": "multiA", "complexqtmscore": 0.88, "prob": 0.93}],
             "summary": {"count": 1, "best_target": "multiA", "best_complexqtmscore": 0.88},
         }
+        if output_path:
+            result["output_path"] = output_path
+        return result
 
     def easy_cluster(self, input_path, *, output_prefix=None, alignment_type=None, coverage=None):
         return {
@@ -153,6 +162,8 @@ class DummyService:
                 min_tmscore=params.get("min_tmscore"),
                 max_evalue=params.get("max_evalue"),
                 min_prob=params.get("min_prob"),
+                tmp_dir=params.get("tmp_dir"),
+                output_path=params.get("output_path"),
             )
         if module == "createindex":
             return self.createindex(params["target_db"])
@@ -201,6 +212,27 @@ def test_search_structure_endpoint(monkeypatch):
     assert response.status_code == 200
     payload = response.json()
     assert payload["summary"]["best_target"] == "hitA"
+
+
+def test_search_structure_endpoint_accepts_tmp_and_output(monkeypatch):
+    monkeypatch.setattr("api.main.get_search_service", lambda: DummyService())
+    client = TestClient(app)
+
+    response = client.post(
+        "/search_structure",
+        json={
+            "pdb_path": "/tmp/query.pdb",
+            "database": "afdb50",
+            "topk": 3,
+            "tmp_dir": "/tmp/foldseek",
+            "output_path": "/tmp/hits.json",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["request"]["tmp_dir"] == "/tmp/foldseek"
+    assert payload["output_path"] == "/tmp/hits.json"
 
 
 def test_home_returns_html():

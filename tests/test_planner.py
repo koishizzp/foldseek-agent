@@ -76,3 +76,17 @@ def test_fallback_plan_prefers_explicit_database_selection():
     assert plan["module"] == "easy-search"
     assert plan["action"] == "execute"
     assert plan["params"]["database"] == "/mnt/db/custom"
+
+
+def test_fallback_plan_extracts_tmp_dir_and_output_path():
+    planner = SearchPlanner(Settings())
+    plan = planner.plan(
+        "easy-search /tmp/query.pdb against afdb50 top8 tmp_dir=/tmp/foldseek output=/tmp/hits.json",
+        available_databases=["afdb50"],
+        available_modules=["easy-search"],
+    )
+
+    assert plan["module"] == "easy-search"
+    assert plan["action"] == "execute"
+    assert plan["params"]["tmp_dir"] == "/tmp/foldseek"
+    assert plan["params"]["output_path"] == "/tmp/hits.json"

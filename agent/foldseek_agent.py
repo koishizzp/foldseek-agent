@@ -64,11 +64,16 @@ class FoldseekAgent:
         min_tmscore: float | None = None,
         max_evalue: float | None = None,
         min_prob: float | None = None,
+        tmp_dir: str | None = None,
     ):
         validate_query_path(pdb_file)
         db_path = self.resolve_database(database)
         out_file = self._unique_path("foldseek", ".m8")
-        result_file = self.runner.search(pdb_file, db_path, out_file)
+        if tmp_dir is None:
+            result_file = self.runner.search(pdb_file, db_path, out_file)
+        else:
+            result = self.runner.easy_search(pdb_file, db_path, out_file, tmp_dir=tmp_dir)
+            result_file = str(result["result_file"])
         df = self.parser.parse(result_file)
         filtered = self.parser.filter_hits(
             df,
@@ -92,11 +97,12 @@ class FoldseekAgent:
         database: str,
         *,
         topk: int = 10,
+        tmp_dir: str | None = None,
     ) -> tuple:
         validate_query_path(pdb_file)
         target_path = self.resolve_database(database)
         out_file = self._unique_path("foldseek_multimer", ".tsv")
-        self.runner.easy_multimersearch(pdb_file, target_path, out_file)
+        self.runner.easy_multimersearch(pdb_file, target_path, out_file, tmp_dir=tmp_dir)
         df = self.parser.parse_table(out_file, self.MULTIMER_COLUMNS)
         if "complexqtmscore" in df.columns:
             df = df.sort_values(by=["complexqtmscore", "prob"], ascending=False).head(topk)

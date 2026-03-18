@@ -1,7 +1,9 @@
 """Structured service layer for Foldseek searches and utilities."""
 from __future__ import annotations
 
+import json
 from math import isfinite
+from pathlib import Path
 from typing import Any
 
 from .foldseek_agent import FoldseekAgent
@@ -59,12 +61,16 @@ class SearchService:
                 min_tmscore=params.get("min_tmscore"),
                 max_evalue=params.get("max_evalue"),
                 min_prob=params.get("min_prob"),
+                tmp_dir=params.get("tmp_dir"),
+                output_path=params.get("output_path"),
             )
         if module == "easy-multimersearch":
             return self.multimer_search(
                 params["pdb_path"],
                 database=str(params["database"]),
                 topk=int(params.get("topk") or 10),
+                tmp_dir=params.get("tmp_dir"),
+                output_path=params.get("output_path"),
             )
         if module == "easy-cluster":
             return self.easy_cluster(
@@ -140,6 +146,25 @@ class SearchService:
             for key, value in payload.items()
         }
 
+    def _resolved_tmp_dir(self, tmp_dir: str | None) -> str:
+        return str(tmp_dir or self.settings.tmp_dir)
+
+    def _export_records_json(
+        self,
+        records: list[dict[str, Any]],
+        output_path: str | None,
+        *,
+        default_name: str,
+    ) -> str | None:
+        if not output_path:
+            return None
+        destination = Path(output_path)
+        if output_path.endswith(("/", "\\")) or destination.suffix == "":
+            destination = destination / default_name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+        return str(destination)
+
     def search_structure(
         self,
         pdb_path: str,
@@ -149,6 +174,8 @@ class SearchService:
         min_tmscore: float | None = None,
         max_evalue: float | None = None,
         min_prob: float | None = None,
+        tmp_dir: str | None = None,
+        output_path: str | None = None,
     ) -> dict[str, Any]:
         resolved_database = self._resolve_database(database)
         hits, summary = self.agent.search_with_summary(
@@ -158,8 +185,10 @@ class SearchService:
             min_tmscore=min_tmscore,
             max_evalue=max_evalue,
             min_prob=min_prob,
+            tmp_dir=tmp_dir,
         )
         records = self._normalize_records(hits.to_dict(orient="records"))
+        exported_output = self._export_records_json(records, output_path, default_name="foldseek_hits.json")
         result = {
             "module": "easy-search",
             "request": {
@@ -169,10 +198,13 @@ class SearchService:
                 "min_tmscore": min_tmscore,
                 "max_evalue": max_evalue,
                 "min_prob": min_prob,
+                "tmp_dir": self._resolved_tmp_dir(tmp_dir),
             },
             "hits": records,
             "summary": {key: _normalize_number(value) for key, value in summary.items()},
         }
+        if exported_output:
+            result["output_path"] = exported_output
         result["summary"] = self._summary_with_best_hit(result)
         return result
 
@@ -182,19 +214,26 @@ class SearchService:
         *,
         database: str,
         topk: int = 10,
+        tmp_dir: str | None = None,
+        output_path: str | None = None,
     ) -> dict[str, Any]:
-        hits, summary = self.agent.multimer_search(pdb_path, database, topk=topk)
+        hits, summary = self.agent.multimer_search(pdb_path, database, topk=topk, tmp_dir=tmp_dir)
         records = self._normalize_records(hits.to_dict(orient="records"))
-        return {
+        result = {
             "module": "easy-multimersearch",
             "request": {
                 "pdb_path": pdb_path,
                 "database": database,
                 "topk": int(topk),
+                "tmp_dir": self._resolved_tmp_dir(tmp_dir),
             },
             "hits": records,
             "summary": {key: _normalize_number(value) for key, value in summary.items()},
         }
+        exported_output = self._export_records_json(records, output_path, default_name="foldseek_multimer_hits.json")
+        if exported_output:
+            result["output_path"] = exported_output
+        return result
 
     def easy_cluster(
         self,
