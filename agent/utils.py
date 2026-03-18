@@ -17,8 +17,8 @@ def validate_config(config: dict) -> None:
     if missing:
         raise ValueError(f"Missing required config key(s): {', '.join(missing)}")
 
-    if not isinstance(config.get("databases"), dict) or not config["databases"]:
-        raise ValueError("`databases` must be a non-empty dictionary of name -> path")
+    if not isinstance(config.get("databases"), dict):
+        raise ValueError("`databases` must be a dictionary of name -> path")
 
 
 def validate_database_name(database: str, allowed: Iterable[str]) -> None:

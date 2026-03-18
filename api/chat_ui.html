@@ -8,7 +8,6 @@
     :root {
       --bg: #f4efe6;
       --panel: rgba(255, 250, 242, 0.9);
-      --panel-strong: #fffaf2;
       --ink: #1f2a1f;
       --muted: #5f6b5f;
       --line: rgba(31, 42, 31, 0.14);
@@ -21,6 +20,7 @@
     }
 
     * { box-sizing: border-box; }
+
     body {
       margin: 0;
       min-height: 100vh;
@@ -75,7 +75,7 @@
     }
 
     .status-card {
-      background: rgba(255,255,255,0.68);
+      background: rgba(255, 255, 255, 0.68);
       border: 1px solid var(--line);
       border-radius: 18px;
       padding: 16px;
@@ -93,6 +93,7 @@
     .status-card span {
       font-size: 16px;
       font-weight: 600;
+      word-break: break-word;
     }
 
     .tagline, .actions {
@@ -110,13 +111,24 @@
       color: var(--muted);
     }
 
-    .upload-strip {
+    .info-strip {
       display: grid;
       gap: 12px;
       padding: 16px;
       border-radius: 18px;
-      background: rgba(255,255,255,0.68);
+      background: rgba(255, 255, 255, 0.68);
       border: 1px solid var(--line);
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .field-stack {
+      display: grid;
+      gap: 6px;
     }
 
     .workspace {
@@ -155,7 +167,7 @@
       line-height: 1.65;
       white-space: pre-wrap;
       border: 1px solid var(--line);
-      background: rgba(255,255,255,0.75);
+      background: rgba(255, 255, 255, 0.75);
     }
 
     .bubble.user {
@@ -176,7 +188,7 @@
       width: 100%;
       border-radius: 14px;
       border: 1px solid var(--line);
-      background: rgba(255,255,255,0.88);
+      background: rgba(255, 255, 255, 0.88);
       padding: 12px 14px;
       color: var(--ink);
     }
@@ -221,7 +233,7 @@
       padding: 14px;
       border: 1px solid var(--line);
       border-radius: 18px;
-      background: rgba(255,255,255,0.74);
+      background: rgba(255, 255, 255, 0.74);
       font-family: "IBM Plex Mono", "Fira Code", monospace;
       font-size: 12px;
       white-space: pre-wrap;
@@ -244,9 +256,11 @@
       .workspace {
         grid-template-columns: 1fr;
       }
-      .row, .upload-controls {
+
+      .row, .field-grid, .upload-controls {
         grid-template-columns: 1fr;
       }
+
       .shell {
         width: min(100vw - 18px, 1400px);
         margin: 10px auto;
@@ -261,7 +275,8 @@
       <h1>Foldseek Agent 工作台</h1>
       <p>左侧是 LLM 驱动的自然语言控制台，可以直接描述要执行的 Foldseek 操作。右侧是显式模块执行面板，适合精确控制参数。上方的文件上传区会把文件落到服务器工作目录，并返回可直接复用的服务器路径。</p>
       <div class="status-grid" id="status-grid"></div>
-      <div class="upload-strip">
+
+      <div class="info-strip">
         <div>
           <h2>文件上传</h2>
           <p class="muted">用于上传查询结构、聚类输入文件或其他需要落到服务器上的本地文件。上传后会返回服务器绝对路径，你可以一键插入聊天框或模块 JSON。</p>
@@ -274,13 +289,31 @@
         </div>
         <div class="upload-path" id="upload-path">尚未上传文件。</div>
       </div>
+
+      <div class="info-strip">
+        <div>
+          <h2>检索数据库</h2>
+          <p class="muted">检索类模块会优先使用这里的数据库选择。可以选配置好的数据库别名，也可以直接填写服务器上的 Foldseek 数据库前缀路径。原始 `.pdb.gz` / `.cif.gz` 文件目录本身不是 Foldseek 数据库；如果你手头只有这类文件，先运行 `createdb`，再对生成结果运行 `createindex`。</p>
+        </div>
+        <div class="field-grid">
+          <div class="field-stack">
+            <label class="muted" for="database-select">数据库别名</label>
+            <select id="database-select"></select>
+          </div>
+          <div class="field-stack">
+            <label class="muted" for="database-custom">自定义服务器路径</label>
+            <input id="database-custom" type="text" placeholder="例如 /mnt/disk3/.../foldseek_db">
+          </div>
+        </div>
+        <div class="upload-path" id="database-hint">当前检索数据库: afdb50</div>
+      </div>
     </section>
 
     <section class="workspace">
       <div class="panel">
         <div>
           <h2>LLM Chat</h2>
-          <p class="muted">支持自然语言调用 8+1 个 Foldseek 模块。搜索完成后，继续追问“为什么第一名更好”这类问题时，会自动使用 reasoning context。</p>
+          <p class="muted">支持自然语言调用 8+1 个 Foldseek 模块。搜索完成后，继续追问为什么第一名更好这类问题时，会自动使用 reasoning context。当前数据库选择会作为检索偏好一起发送。</p>
         </div>
         <div class="chat-log" id="chat-log"></div>
         <textarea id="chat-input" placeholder="例如：用 afdb50 检索 /abs/path/query.pdb，返回前 5 个结果。或者：为 /abs/path/mydb 创建索引。"></textarea>
@@ -293,7 +326,7 @@
       <div class="panel">
         <div>
           <h2>Direct Module Runner</h2>
-          <p class="muted">直接选择模块并发送 JSON。适合 `createdb`、`result2msa`、`createindex` 这类输入更明确的场景。</p>
+          <p class="muted">直接选择模块并发送 JSON。适合 `createdb`、`result2msa`、`createindex` 这类输入更明确的场景。切换数据库选择时，检索类模块的 `database` 字段会自动同步。</p>
         </div>
         <div class="row">
           <div>
@@ -325,6 +358,9 @@
     const uploadUseChat = document.getElementById("upload-use-chat");
     const uploadUseModule = document.getElementById("upload-use-module");
     const uploadPath = document.getElementById("upload-path");
+    const databaseSelect = document.getElementById("database-select");
+    const databaseCustom = document.getElementById("database-custom");
+    const databaseHint = document.getElementById("database-hint");
     const moduleSelect = document.getElementById("module-select");
     const endpointView = document.getElementById("endpoint-view");
     const payloadEditor = document.getElementById("payload-editor");
@@ -333,6 +369,8 @@
     const moduleResponse = document.getElementById("module-response");
     const statusGrid = document.getElementById("status-grid");
     const moduleTags = document.getElementById("module-tags");
+
+    const CUSTOM_DATABASE_VALUE = "__custom__";
 
     const moduleConfig = {
       "easy-search": {
@@ -389,6 +427,21 @@
 
     let latestUpload = null;
 
+    function clonePayload(payload) {
+      return JSON.parse(JSON.stringify(payload));
+    }
+
+    function moduleSupportsDatabase(moduleName) {
+      return moduleName === "easy-search" || moduleName === "easy-multimersearch";
+    }
+
+    function getSelectedDatabase() {
+      if (databaseSelect.value === CUSTOM_DATABASE_VALUE) {
+        return databaseCustom.value.trim();
+      }
+      return databaseSelect.value || "";
+    }
+
     function addBubble(role, content) {
       const node = document.createElement("div");
       node.className = `bubble ${role}`;
@@ -397,10 +450,60 @@
       chatLog.scrollTop = chatLog.scrollHeight;
     }
 
+    function renderDatabaseHint(moduleName) {
+      if (!moduleSupportsDatabase(moduleName)) {
+        databaseHint.textContent = "当前模块不使用检索数据库。";
+        return;
+      }
+      if (databaseSelect.value === CUSTOM_DATABASE_VALUE && !databaseCustom.value.trim()) {
+        databaseHint.textContent = "自定义模式下请输入服务器上的 Foldseek 数据库前缀路径。原始结构文件目录不能直接当数据库。";
+        return;
+      }
+      const database = getSelectedDatabase();
+      databaseHint.textContent = database
+        ? `当前检索数据库: ${database}`
+        : "未选择数据库。";
+    }
+
+    function toggleCustomDatabaseInput() {
+      const useCustom = databaseSelect.value === CUSTOM_DATABASE_VALUE;
+      databaseCustom.disabled = !useCustom;
+      if (!useCustom) {
+        databaseCustom.placeholder = "切换到“自定义服务器路径”后可在这里填写数据库前缀路径";
+      } else {
+        databaseCustom.placeholder = "例如 /mnt/disk3/.../foldseek_db";
+      }
+      renderDatabaseHint(moduleSelect.value);
+    }
+
+    function syncSelectedDatabaseToPayload() {
+      renderDatabaseHint(moduleSelect.value);
+      if (!moduleSupportsDatabase(moduleSelect.value)) {
+        return;
+      }
+      let payload;
+      try {
+        payload = JSON.parse(payloadEditor.value || "{}");
+      } catch {
+        payload = clonePayload(moduleConfig[moduleSelect.value].payload);
+      }
+      const database = getSelectedDatabase();
+      if (database) {
+        payload.database = database;
+        payloadEditor.value = JSON.stringify(payload, null, 2);
+      }
+    }
+
     function setModulePayload(moduleName) {
       const config = moduleConfig[moduleName];
+      const payload = clonePayload(config.payload);
+      const database = getSelectedDatabase();
       endpointView.value = config.endpoint;
-      payloadEditor.value = JSON.stringify(config.payload, null, 2);
+      if (moduleSupportsDatabase(moduleName) && database) {
+        payload.database = database;
+      }
+      payloadEditor.value = JSON.stringify(payload, null, 2);
+      renderDatabaseHint(moduleName);
     }
 
     function renderUploadInfo(info) {
@@ -424,10 +527,10 @@
       const moduleName = moduleSelect.value;
       const targetField = moduleUploadField[moduleName];
       if (!targetField) {
-        moduleResponse.textContent = `模块 ${moduleName} 默认没有单文件路径插槽，请手动编辑 JSON。`;
+        moduleResponse.textContent = `模块 ${moduleName} 没有默认的单文件路径字段，请直接编辑 JSON。`;
         return;
       }
-      const payload = JSON.parse(payloadEditor.value);
+      const payload = JSON.parse(payloadEditor.value || "{}");
       payload[targetField] = latestUpload.path;
       payloadEditor.value = JSON.stringify(payload, null, 2);
       moduleResponse.textContent = `已把 ${latestUpload.path} 写入字段 ${targetField}。`;
@@ -443,32 +546,15 @@
       chatInput.focus();
     }
 
-    async function loadStatus() {
-      const [statusResp, modulesResp] = await Promise.all([
-        fetch("/ui/status"),
-        fetch("/foldseek/modules")
-      ]);
-      const status = await statusResp.json();
-      const modules = await modulesResp.json();
-
-      statusGrid.innerHTML = "";
-      const cards = [
-        ["Agent", status.agent?.app_name || "Foldseek Agent"],
-        ["LLM", status.llm?.configured ? `${status.llm.model}` : "未配置"],
-        ["默认数据库", status.foldseek?.default_database || "-"],
-        ["二进制", status.foldseek?.binary || "foldseek"],
-        ["上传目录", status.foldseek?.upload_dir || "-"]
-      ];
-      for (const [label, value] of cards) {
-        const card = document.createElement("div");
-        card.className = "status-card";
-        card.innerHTML = `<strong>${label}</strong><span>${value}</span>`;
-        statusGrid.appendChild(card);
-      }
+    function populateModules(moduleNames) {
+      const names = Array.isArray(moduleNames) && moduleNames.length
+        ? moduleNames.filter((name) => Boolean(moduleConfig[name]))
+        : Object.keys(moduleConfig);
+      const previous = moduleSelect.value;
 
       moduleTags.innerHTML = "";
       moduleSelect.innerHTML = "";
-      for (const moduleName of modules.modules || []) {
+      for (const moduleName of names) {
         const tag = document.createElement("span");
         tag.className = "tag";
         tag.textContent = moduleName;
@@ -479,9 +565,104 @@
         option.textContent = moduleName;
         moduleSelect.appendChild(option);
       }
-      if (moduleSelect.value) {
-        setModulePayload(moduleSelect.value);
+
+      const nextValue = names.includes(previous) ? previous : names[0];
+      if (nextValue) {
+        moduleSelect.value = nextValue;
+        setModulePayload(nextValue);
       }
+    }
+
+    function renderDatabaseControls(foldseekStatus) {
+      const availableDatabases = Array.isArray(foldseekStatus?.available_databases)
+        ? foldseekStatus.available_databases
+        : [];
+      const defaultDatabase = foldseekStatus?.default_database || "";
+      const currentCustom = databaseCustom.value.trim();
+      const currentSelection = databaseSelect.value;
+
+      databaseSelect.innerHTML = "";
+      for (const name of availableDatabases) {
+        const option = document.createElement("option");
+        option.value = name;
+        option.textContent = name;
+        databaseSelect.appendChild(option);
+      }
+
+      const customOption = document.createElement("option");
+      customOption.value = CUSTOM_DATABASE_VALUE;
+      customOption.textContent = "自定义服务器路径";
+      databaseSelect.appendChild(customOption);
+
+      if (currentSelection && Array.from(databaseSelect.options).some((item) => item.value === currentSelection)) {
+        databaseSelect.value = currentSelection;
+      } else if (defaultDatabase && availableDatabases.includes(defaultDatabase)) {
+        databaseSelect.value = defaultDatabase;
+      } else if (availableDatabases.length) {
+        databaseSelect.value = availableDatabases[0];
+      } else {
+        databaseSelect.value = CUSTOM_DATABASE_VALUE;
+      }
+
+      if (currentCustom) {
+        databaseCustom.value = currentCustom;
+      }
+
+      toggleCustomDatabaseInput();
+      syncSelectedDatabaseToPayload();
+    }
+
+    async function readJsonResponse(response) {
+      const raw = await response.text();
+      let payload = {};
+
+      if (raw) {
+        try {
+          payload = JSON.parse(raw);
+        } catch (error) {
+          if (!response.ok) {
+            throw new Error(`${response.status} ${response.statusText}: ${raw}`);
+          }
+          throw new Error(`服务器返回了非 JSON 内容: ${raw}`);
+        }
+      }
+
+      if (!response.ok) {
+        const detail = payload?.detail || raw || `${response.status} ${response.statusText}`;
+        throw new Error(detail);
+      }
+
+      return payload;
+    }
+
+    async function loadStatus() {
+      const [status, modules] = await Promise.all([
+        fetch("/ui/status").then(readJsonResponse),
+        fetch("/foldseek/modules").then(readJsonResponse)
+      ]);
+
+      const aliases = Array.isArray(status.foldseek?.available_databases)
+        ? status.foldseek.available_databases
+        : [];
+
+      statusGrid.innerHTML = "";
+      const cards = [
+        ["Agent", status.agent?.app_name || "Foldseek Agent"],
+        ["LLM", status.llm?.configured ? `${status.llm.model}` : "未配置"],
+        ["默认数据库", status.foldseek?.default_database || "-"],
+        ["数据库别名", aliases.length ? aliases.join(", ") : "未配置"],
+        ["Foldseek 二进制", status.foldseek?.binary || "foldseek"],
+        ["上传目录", status.foldseek?.upload_dir || "-"]
+      ];
+      for (const [label, value] of cards) {
+        const card = document.createElement("div");
+        card.className = "status-card";
+        card.innerHTML = `<strong>${label}</strong><span>${value}</span>`;
+        statusGrid.appendChild(card);
+      }
+
+      populateModules(modules.modules || Object.keys(moduleConfig));
+      renderDatabaseControls(status.foldseek || {});
     }
 
     async function uploadFile() {
@@ -494,7 +675,7 @@
       formData.append("file", uploadInput.files[0]);
       try {
         const response = await fetch("/ui/upload", { method: "POST", body: formData });
-        const payload = await response.json();
+        const payload = await readJsonResponse(response);
         latestUpload = payload;
         renderUploadInfo(payload);
         injectUploadedPathIntoPayload();
@@ -507,7 +688,10 @@
 
     async function sendChat() {
       const message = chatInput.value.trim();
-      if (!message) return;
+      if (!message) {
+        return;
+      }
+
       chatSend.disabled = true;
       addBubble("user", message);
       chatState.messages.push({ role: "user", content: message });
@@ -520,10 +704,11 @@
           body: JSON.stringify({
             model: "foldseek-search-agent",
             messages: chatState.messages,
-            reasoning_context: chatState.reasoningContext
+            reasoning_context: chatState.reasoningContext,
+            preferred_database: getSelectedDatabase() || null
           })
         });
-        const payload = await response.json();
+        const payload = await readJsonResponse(response);
         const reply = payload?.choices?.[0]?.message?.content || JSON.stringify(payload, null, 2);
         addBubble("assistant", reply);
         chatState.messages.push({ role: "assistant", content: reply });
@@ -540,13 +725,18 @@
       try {
         const moduleName = moduleSelect.value;
         const config = moduleConfig[moduleName];
-        const payload = JSON.parse(payloadEditor.value);
+        const payload = JSON.parse(payloadEditor.value || "{}");
+
+        if (moduleSupportsDatabase(moduleName) && !String(payload.database || "").trim()) {
+          throw new Error("当前检索模块需要 database。请选择数据库别名，或填写自定义服务器路径。");
+        }
+
         const response = await fetch(config.endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         });
-        const data = await response.json();
+        const data = await readJsonResponse(response);
         moduleResponse.textContent = JSON.stringify(data, null, 2);
       } catch (error) {
         moduleResponse.textContent = `执行失败: ${error}`;
@@ -567,13 +757,24 @@
       chatLog.innerHTML = "";
       addBubble("assistant", "上下文已清空。现在可以开始新的 Foldseek 工作流。");
     });
+
     uploadSend.addEventListener("click", uploadFile);
     uploadUseChat.addEventListener("click", injectUploadedPathIntoChat);
     uploadUseModule.addEventListener("click", injectUploadedPathIntoPayload);
+
+    databaseSelect.addEventListener("change", () => {
+      toggleCustomDatabaseInput();
+      syncSelectedDatabaseToPayload();
+    });
+    databaseCustom.addEventListener("input", syncSelectedDatabaseToPayload);
+
     moduleSelect.addEventListener("change", () => setModulePayload(moduleSelect.value));
     payloadReset.addEventListener("click", () => setModulePayload(moduleSelect.value));
     moduleRun.addEventListener("click", runModule);
 
+    populateModules(Object.keys(moduleConfig));
+    renderDatabaseControls({ available_databases: ["afdb50"], default_database: "afdb50" });
+    renderUploadInfo(null);
     addBubble("assistant", "工作台已就绪。先上传文件，再用自然语言或模块面板执行 Foldseek 操作会更顺手。");
     loadStatus().catch((error) => {
       addBubble("assistant", `初始化失败: ${error}`);

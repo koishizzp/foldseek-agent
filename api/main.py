@@ -116,6 +116,7 @@ class ChatCompletionRequest(BaseModel):
     latest_result: dict[str, Any] | None = None
     previous_best_target: str | None = None
     reasoning_context: dict[str, Any] | None = None
+    preferred_database: str | None = None
 
 
 def get_search_service() -> SearchService:
@@ -186,14 +187,12 @@ def health() -> dict[str, str]:
 
 @app.get("/foldseek/modules")
 def list_modules() -> dict[str, Any]:
-    service = get_search_service()
-    return {"modules": service.available_modules()}
+    return {"modules": list(SearchService.SUPPORTED_MODULES)}
 
 
 @app.get("/ui/status")
 def ui_status() -> dict[str, Any]:
     settings = get_settings()
-    service = get_search_service()
     return {
         "agent": {"status": "ok", "app_name": settings.app_name},
         "llm": {
@@ -204,8 +203,9 @@ def ui_status() -> dict[str, Any]:
         "foldseek": {
             "binary": settings.foldseek_path,
             "default_database": settings.default_database,
-            "available_databases": service.available_databases(),
-            "supported_modules": service.available_modules(),
+            "available_databases": sorted(settings.databases.keys()),
+            "configured_databases": settings.databases,
+            "supported_modules": list(SearchService.SUPPORTED_MODULES),
             "tmp_dir": settings.tmp_dir,
             "result_dir": settings.result_dir,
             "upload_dir": settings.upload_dir,
@@ -393,6 +393,7 @@ def chat_completions(req: ChatCompletionRequest) -> dict[str, Any]:
         service.available_databases(),
         available_modules=service.available_modules(),
         previous_request=previous_request,
+        preferred_database=req.preferred_database,
     )
     module = str(plan.get("module") or "easy-search")
 

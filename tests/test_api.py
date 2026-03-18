@@ -32,6 +32,7 @@ class DummyService:
         min_prob=None,
     ):
         return {
+            "module": "easy-search",
             "request": {
                 "pdb_path": pdb_path,
                 "database": database or "afdb50",
@@ -161,8 +162,25 @@ class DummyService:
 class DummyPlanner:
     def __init__(self, plan):
         self._plan = plan
+        self.calls = []
 
-    def plan(self, message, available_databases, available_modules=None, previous_request=None):
+    def plan(
+        self,
+        message,
+        available_databases,
+        available_modules=None,
+        previous_request=None,
+        preferred_database=None,
+    ):
+        self.calls.append(
+            {
+                "message": message,
+                "available_databases": list(available_databases),
+                "available_modules": list(available_modules or []),
+                "previous_request": dict(previous_request or {}),
+                "preferred_database": preferred_database,
+            }
+        )
         return dict(self._plan)
 
 
@@ -213,30 +231,28 @@ def test_upload_endpoint(monkeypatch, tmp_path):
 
 def test_chat_completions_execution(monkeypatch):
     monkeypatch.setattr("api.main.get_search_service", lambda: DummyService())
-    monkeypatch.setattr(
-        "api.main.get_search_planner",
-        lambda: DummyPlanner(
-            {
-                "action": "execute",
-                "module": "easy-search",
-                "params": {
-                    "pdb_path": "/tmp/query.pdb",
-                    "database": "afdb50",
-                    "topk": 5,
-                    "min_tmscore": 0.8,
-                    "max_evalue": None,
-                    "min_prob": None,
-                },
-                "needs_input": False,
-                "question": None,
-            }
-        ),
+    planner = DummyPlanner(
+        {
+            "action": "execute",
+            "module": "easy-search",
+            "params": {
+                "pdb_path": "/tmp/query.pdb",
+                "database": "afdb50",
+                "topk": 5,
+                "min_tmscore": 0.8,
+                "max_evalue": None,
+                "min_prob": None,
+            },
+            "needs_input": False,
+            "question": None,
+        }
     )
+    monkeypatch.setattr("api.main.get_search_planner", lambda: planner)
     client = TestClient(app)
 
     response = client.post(
         "/v1/chat/completions",
-        json={"messages": [{"role": "user", "content": "请检索 /tmp/query.pdb top5"}]},
+        json={"messages": [{"role": "user", "content": "search /tmp/query.pdb top5"}]},
     )
 
     assert response.status_code == 200
@@ -245,6 +261,40 @@ def test_chat_completions_execution(monkeypatch):
     assert payload["best_hit"]["target"] == "hitA"
     assert payload["choices"][0]["message"]["content"] == "best=hitA"
     assert payload["operation_plan"]["module"] == "easy-search"
+    assert planner.calls[0]["preferred_database"] is None
+
+
+def test_chat_completions_passes_preferred_database(monkeypatch):
+    monkeypatch.setattr("api.main.get_search_service", lambda: DummyService())
+    planner = DummyPlanner(
+        {
+            "action": "execute",
+            "module": "easy-search",
+            "params": {
+                "pdb_path": "/tmp/query.pdb",
+                "database": "/mnt/db/custom",
+                "topk": 5,
+                "min_tmscore": None,
+                "max_evalue": None,
+                "min_prob": None,
+            },
+            "needs_input": False,
+            "question": None,
+        }
+    )
+    monkeypatch.setattr("api.main.get_search_planner", lambda: planner)
+    client = TestClient(app)
+
+    response = client.post(
+        "/v1/chat/completions",
+        json={
+            "messages": [{"role": "user", "content": "search /tmp/query.pdb"}],
+            "preferred_database": "/mnt/db/custom",
+        },
+    )
+
+    assert response.status_code == 200
+    assert planner.calls[0]["preferred_database"] == "/mnt/db/custom"
 
 
 def test_chat_completions_reasoning(monkeypatch):
@@ -255,7 +305,7 @@ def test_chat_completions_reasoning(monkeypatch):
     response = client.post(
         "/v1/chat/completions",
         json={
-            "messages": [{"role": "user", "content": "为什么这个命中更好"}],
+            "messages": [{"role": "user", "content": "why is the first hit better?"}],
             "latest_result": latest_result,
         },
     )
@@ -266,8 +316,7 @@ def test_chat_completions_reasoning(monkeypatch):
     assert payload["choices"][0]["message"]["content"] == "reasoned"
 
 
-def test_modules_endpoint(monkeypatch):
-    monkeypatch.setattr("api.main.get_search_service", lambda: DummyService())
+def test_modules_endpoint():
     client = TestClient(app)
 
     response = client.get("/foldseek/modules")
@@ -278,8 +327,10 @@ def test_modules_endpoint(monkeypatch):
 
 
 def test_ui_status_contains_upload_dir(monkeypatch, tmp_path):
-    monkeypatch.setattr("api.main.get_search_service", lambda: DummyService())
-    monkeypatch.setattr("api.main.get_settings", lambda: Settings(upload_dir=str(tmp_path / "uploads")))
+    monkeypatch.setattr(
+        "api.main.get_settings",
+        lambda: Settings(upload_dir=str(tmp_path / "uploads"), databases={"afdb50": "/tmp/afdb50"}),
+    )
     client = TestClient(app)
 
     response = client.get("/ui/status")
@@ -287,6 +338,7 @@ def test_ui_status_contains_upload_dir(monkeypatch, tmp_path):
     assert response.status_code == 200
     payload = response.json()
     assert payload["foldseek"]["upload_dir"] == str(tmp_path / "uploads")
+    assert payload["foldseek"]["available_databases"] == ["afdb50"]
 
 
 def test_easy_cluster_endpoint(monkeypatch):
@@ -333,7 +385,7 @@ def test_chat_completions_createindex_execution(monkeypatch):
 
     response = client.post(
         "/v1/chat/completions",
-        json={"messages": [{"role": "user", "content": "为 /tmp/db 创建索引"}]},
+        json={"messages": [{"role": "user", "content": "create index for /tmp/db"}]},
     )
 
     assert response.status_code == 200

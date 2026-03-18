@@ -15,7 +15,10 @@ from .settings import Settings
 
 LOGGER = logging.getLogger(__name__)
 
-STRUCTURE_PATH_PATTERN = re.compile(r"""["']?((?:[A-Za-z]:\\|/|\.{1,2}[\\/])?[^\s"'`]+?\.(?:pdb|cif|mmcif|ent))["']?""", re.IGNORECASE)
+STRUCTURE_PATH_PATTERN = re.compile(
+    r"""["']?((?:[A-Za-z]:\\|/|\.{1,2}[\\/])?[^\s"'`]+?\.(?:pdb|cif|mmcif|ent))["']?""",
+    re.IGNORECASE,
+)
 GENERIC_PATH_PATTERN = re.compile(r"""["']((?:[^"']*[\\/][^"']*|[^"']+\.db[^"']*))["']""")
 BARE_PATH_PATTERN = re.compile(r"""((?:[A-Za-z]:\\|/|\.{1,2}[\\/])\S+)""")
 TOPK_PATTERN = re.compile(r"""(?:top\s*|前\s*)(\d{1,3})""", re.IGNORECASE)
@@ -25,8 +28,20 @@ EVALUE_PATTERN = re.compile(rf"""e-?value\s*(?:<=|<|不高于|至多)\s*{FLOAT_P
 PROB_PATTERN = re.compile(rf"""prob(?:ability)?\s*(?:>=|>|至少|不低于)\s*{FLOAT_PATTERN}""", re.IGNORECASE)
 
 MODULE_HINTS = {
-    "easy-multimercluster": ("multimercluster", "easy-multimercluster", "multimer cluster", "复合物聚类", "多聚体聚类"),
-    "easy-multimersearch": ("multimersearch", "easy-multimersearch", "multimer search", "复合物搜索", "多聚体搜索"),
+    "easy-multimercluster": (
+        "multimercluster",
+        "easy-multimercluster",
+        "multimer cluster",
+        "复合物聚类",
+        "多聚体聚类",
+    ),
+    "easy-multimersearch": (
+        "multimersearch",
+        "easy-multimersearch",
+        "multimer search",
+        "复合物搜索",
+        "多聚体搜索",
+    ),
     "easy-cluster": ("easy-cluster", "cluster", "聚类"),
     "createdb": ("createdb", "create db", "创建数据库", "建库"),
     "databases": ("download database", "download databases", "databases", "下载数据库"),
@@ -64,6 +79,18 @@ def _extract_generic_paths(message: str) -> list[str]:
     return deduped
 
 
+def _looks_like_path(value: str | None) -> bool:
+    if not value:
+        return False
+    return bool(
+        value.startswith(("/", "./", "../"))
+        or re.match(r"^[A-Za-z]:\\", value)
+        or "/" in value
+        or "\\" in value
+        or value.endswith(".db")
+    )
+
+
 def _parse_threshold(pattern: re.Pattern[str], message: str) -> float | None:
     match = pattern.search(message)
     if not match:
@@ -92,9 +119,17 @@ class SearchPlanner:
         available_databases: list[str],
         available_modules: list[str] | None = None,
         previous_request: dict[str, Any] | None = None,
+        preferred_database: str | None = None,
     ) -> dict[str, Any]:
         modules = available_modules or list(MODULE_HINTS)
-        fallback = self._fallback_plan(message, available_databases, modules, previous_request)
+        normalized_database = self._normalize_database_value(preferred_database, available_databases)
+        fallback = self._fallback_plan(
+            message,
+            available_databases,
+            modules,
+            previous_request,
+            preferred_database=normalized_database,
+        )
         if not self.client:
             return fallback
 
@@ -103,6 +138,7 @@ class SearchPlanner:
             "available_databases": available_databases,
             "available_modules": modules,
             "previous_request": previous_request or {},
+            "preferred_database": normalized_database,
             "output_format": {
                 "action": "execute or clarify",
                 "module": "one of available_modules",
@@ -128,10 +164,33 @@ class SearchPlanner:
             )
             raw = _strip_code_fences(response.output_text or "")
             decoded = json.loads(raw)
-            return self._sanitize_plan(decoded, message, available_databases, modules, previous_request, fallback)
+            return self._sanitize_plan(
+                decoded,
+                available_databases,
+                modules,
+                fallback,
+                preferred_database=normalized_database,
+            )
         except Exception:  # noqa: BLE001
             LOGGER.exception("Foldseek planner failed; using heuristic fallback.")
             return fallback
+
+    def _normalize_database_value(
+        self,
+        database: str | None,
+        available_databases: list[str],
+    ) -> str | None:
+        candidate = str(database or "").strip()
+        if not candidate:
+            return None
+        if candidate in available_databases or _looks_like_path(candidate):
+            return candidate
+        return None
+
+    def _default_database(self, available_databases: list[str]) -> str:
+        if self.settings.default_database in available_databases:
+            return self.settings.default_database
+        return available_databases[0] if available_databases else ""
 
     def _fallback_plan(
         self,
@@ -139,18 +198,19 @@ class SearchPlanner:
         available_databases: list[str],
         available_modules: list[str],
         previous_request: dict[str, Any] | None = None,
+        preferred_database: str | None = None,
     ) -> dict[str, Any]:
         previous_request = previous_request or {}
         module = self._infer_module(message, available_modules)
         generic_paths = _extract_generic_paths(message)
         structure_paths = _extract_structure_paths(message)
-        database = self._infer_database(message, available_databases) or previous_request.get("database")
-        if database not in available_databases:
-            database = (
-                self.settings.default_database
-                if self.settings.default_database in available_databases
-                else (available_databases[0] if available_databases else "")
-            )
+        database = (
+            preferred_database
+            or self._infer_database(message, available_databases)
+            or self._infer_database_path(generic_paths, structure_paths)
+            or self._normalize_database_value(previous_request.get("database"), available_databases)
+            or self._default_database(available_databases)
+        )
 
         topk_match = TOPK_PATTERN.search(message.lower())
         topk = int(topk_match.group(1)) if topk_match else int(previous_request.get("topk") or 10)
@@ -171,12 +231,16 @@ class SearchPlanner:
             }
             if not pdb_path:
                 question = "请提供要检索的结构文件路径，例如 /path/to/query.pdb。"
+            elif not database:
+                question = "请提供要检索的数据库别名，或直接提供服务器上的 Foldseek 数据库前缀路径。"
 
         elif module == "easy-multimersearch":
-            pdb_path = structure_paths[0] if structure_paths else None
+            pdb_path = structure_paths[0] if structure_paths else previous_request.get("pdb_path")
             params = {"pdb_path": pdb_path, "database": database, "topk": topk}
             if not pdb_path:
                 question = "请提供复合体结构文件路径，例如 /path/to/query_multimer.pdb。"
+            elif not database:
+                question = "请提供要检索的数据库别名，或直接提供服务器上的 Foldseek 数据库前缀路径。"
 
         elif module in {"easy-cluster", "easy-multimercluster", "createdb", "createindex"}:
             input_path = generic_paths[0] if generic_paths else None
@@ -190,10 +254,10 @@ class SearchPlanner:
             else:
                 params = {"target_db": input_path}
             if not input_path:
-                question = "请提供输入路径。比如输入目录、结构文件路径，或数据库前缀路径。"
+                question = "请提供输入路径，比如输入目录、结构文件路径，或数据库前缀路径。"
 
         elif module == "databases":
-            params = {"database_name": database or None}
+            params = {"database_name": self._infer_database(message, available_databases) or None}
             if not params["database_name"]:
                 question = "请说明要下载哪个 Foldseek 预构建数据库，例如 afdb50 或 pdb。"
 
@@ -225,6 +289,16 @@ class SearchPlanner:
                 return name
         return None
 
+    def _infer_database_path(self, generic_paths: list[str], structure_paths: list[str]) -> str | None:
+        structure_set = {item.strip() for item in structure_paths}
+        for value in generic_paths:
+            candidate = value.strip()
+            if candidate in structure_set:
+                continue
+            if _looks_like_path(candidate):
+                return candidate
+        return None
+
     def _infer_module(self, message: str, available_modules: list[str]) -> str:
         text = message.lower()
         for module in (
@@ -247,17 +321,19 @@ class SearchPlanner:
     def _sanitize_plan(
         self,
         decoded: dict[str, Any],
-        message: str,
         available_databases: list[str],
         available_modules: list[str],
-        previous_request: dict[str, Any] | None,
         fallback: dict[str, Any],
+        *,
+        preferred_database: str | None = None,
     ) -> dict[str, Any]:
         if not isinstance(decoded, dict):
             return fallback
+
         module = str(decoded.get("module") or fallback["module"]).strip()
         if module not in available_modules:
             module = fallback["module"]
+
         params = decoded.get("params") if isinstance(decoded.get("params"), dict) else dict(fallback["params"])
         question = decoded.get("question")
         needs_input = bool(decoded.get("needs_input"))
@@ -268,9 +344,12 @@ class SearchPlanner:
             question = fallback.get("question")
 
         if module in {"easy-search", "easy-multimersearch"}:
-            database = str(params.get("database") or fallback["params"].get("database") or "").strip()
-            if database not in available_databases:
-                database = fallback["params"].get("database")
+            database = (
+                preferred_database
+                or self._normalize_database_value(params.get("database"), available_databases)
+                or self._normalize_database_value(fallback["params"].get("database"), available_databases)
+                or self._default_database(available_databases)
+            )
             params["database"] = database
             try:
                 params["topk"] = max(1, min(int(params.get("topk", fallback["params"].get("topk", 10))), 200))
@@ -292,6 +371,11 @@ class SearchPlanner:
             needs_input = True
             action = "clarify"
             question = question or fallback.get("question") or "请提供结构文件路径。"
+
+        if module in {"easy-search", "easy-multimersearch"} and not params.get("database"):
+            needs_input = True
+            action = "clarify"
+            question = question or fallback.get("question") or "请提供数据库别名，或直接提供服务器上的 Foldseek 数据库前缀路径。"
 
         if module in {"easy-cluster", "easy-multimercluster", "createdb"} and not params.get("input_path"):
             needs_input = True
