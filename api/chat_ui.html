@@ -277,12 +277,152 @@
       display: none;
     }
 
+    .viz-shell {
+      align-content: start;
+    }
+
+    .viz-stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 10px;
+    }
+
+    .viz-stat {
+      background: rgba(255, 255, 255, 0.78);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 12px 14px;
+      display: grid;
+      gap: 4px;
+    }
+
+    .viz-stat strong {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .viz-stat span {
+      font-size: 18px;
+      font-weight: 700;
+      word-break: break-word;
+    }
+
+    .viz-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .viz-card {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 14px;
+      background: rgba(255, 255, 255, 0.78);
+      display: grid;
+      gap: 10px;
+    }
+
+    .viz-title {
+      font-size: 12px;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+    }
+
+    .viz-canvas {
+      width: 100%;
+      min-height: 220px;
+    }
+
+    .viz-note {
+      min-height: 72px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .viz-point {
+      cursor: pointer;
+      transition: opacity 120ms ease, stroke-width 120ms ease;
+    }
+
+    .viz-point:focus-visible {
+      opacity: 1;
+      stroke: #1f2a1f;
+      stroke-width: 2.5;
+      outline: none;
+    }
+
+    .viz-rank-row {
+      cursor: pointer;
+    }
+
+    .viz-rank-track {
+      transition: fill 120ms ease, stroke 120ms ease;
+    }
+
+    .viz-rank-row:hover .viz-rank-track,
+    .viz-rank-row:focus-visible .viz-rank-track {
+      fill: rgba(31, 42, 31, 0.1);
+    }
+
+    .viz-rank-row:focus-visible {
+      outline: none;
+    }
+
+    .viz-detail-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .viz-detail {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.82);
+      padding: 10px 12px;
+      transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
+    }
+
+    .viz-detail[open] {
+      background: rgba(255, 255, 255, 0.94);
+      border-color: rgba(29, 107, 87, 0.22);
+      box-shadow: 0 12px 28px rgba(41, 31, 20, 0.06);
+    }
+
+    .viz-detail.is-active {
+      border-color: rgba(176, 77, 47, 0.28);
+      box-shadow: 0 0 0 2px rgba(176, 77, 47, 0.12), 0 12px 28px rgba(41, 31, 20, 0.06);
+    }
+
+    .viz-detail summary {
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--ink);
+      line-height: 1.5;
+    }
+
+    .viz-detail summary:focus-visible {
+      outline: 2px solid rgba(176, 77, 47, 0.18);
+      outline-offset: 4px;
+      border-radius: 8px;
+    }
+
+    .viz-detail-body {
+      margin-top: 10px;
+      display: grid;
+      gap: 4px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.5;
+      word-break: break-word;
+    }
+
     @media (max-width: 980px) {
       .workspace {
         grid-template-columns: 1fr;
       }
 
-      .row, .field-grid, .upload-controls {
+      .row, .field-grid, .upload-controls, .viz-grid {
         grid-template-columns: 1fr;
       }
 
@@ -424,6 +564,32 @@
           <button class="secondary" id="payload-reset">重置示例</button>
         </div>
         <div class="response" id="module-response">等待执行…</div>
+        <div class="info-strip viz-shell">
+          <div>
+            <h2>检索可视化</h2>
+            <p class="muted">最近一次 easy-search / easy-multimersearch 会直接在浏览器里渲染，便于查看 TM-score/complexqTM 分布、TM-score/complexqTM vs prob 散点图和 Top 命中详情。</p>
+          </div>
+          <div class="viz-stat-grid" id="search-viz-stats"></div>
+          <div class="viz-grid">
+            <div class="viz-card">
+              <div class="viz-title" id="search-viz-distribution-title">分数分布</div>
+              <svg class="viz-canvas" id="search-viz-distribution" viewBox="0 0 360 220" role="img" aria-label="Search score distribution"></svg>
+            </div>
+            <div class="viz-card">
+              <div class="viz-title" id="search-viz-ranking-title">Top 命中排名</div>
+              <svg class="viz-canvas" id="search-viz-ranking" viewBox="0 0 360 260" role="img" aria-label="Search hit ranking"></svg>
+            </div>
+            <div class="viz-card">
+              <div class="viz-title" id="search-viz-scatter-title">TM-score / complexqTM vs prob</div>
+              <svg class="viz-canvas" id="search-viz-scatter" viewBox="0 0 360 240" role="img" aria-label="Search score vs probability"></svg>
+            </div>
+            <div class="viz-card">
+              <div class="viz-title" id="search-viz-details-title">Top 命中详情</div>
+              <div class="viz-detail-list" id="search-viz-details"></div>
+            </div>
+          </div>
+          <div class="response viz-note" id="search-viz-note">完成 easy-search 或 easy-multimersearch 后，这里会自动显示图表和详情卡。</div>
+        </div>
       </div>
     </section>
   </div>
@@ -466,9 +632,24 @@
     const searchFillChat = document.getElementById("search-fill-chat");
     const searchRun = document.getElementById("search-run");
     const searchLaunchHint = document.getElementById("search-launch-hint");
+    const searchVizStats = document.getElementById("search-viz-stats");
+    const searchVizDistributionTitle = document.getElementById("search-viz-distribution-title");
+    const searchVizDistribution = document.getElementById("search-viz-distribution");
+    const searchVizRankingTitle = document.getElementById("search-viz-ranking-title");
+    const searchVizRanking = document.getElementById("search-viz-ranking");
+    const searchVizScatterTitle = document.getElementById("search-viz-scatter-title");
+    const searchVizScatter = document.getElementById("search-viz-scatter");
+    const searchVizDetailsTitle = document.getElementById("search-viz-details-title");
+    const searchVizDetails = document.getElementById("search-viz-details");
+    const searchVizNote = document.getElementById("search-viz-note");
 
     const CUSTOM_DATABASE_VALUE = "__custom__";
+    const SEARCH_VIZ_DETAIL_LIMIT = 10;
+    const SEARCH_VIZ_RANKING_LIMIT = SEARCH_VIZ_DETAIL_LIMIT;
+    const SEARCH_VIZ_SCATTER_LIMIT = SEARCH_VIZ_DETAIL_LIMIT;
     let currentSearchMode = "easy-search";
+    let latestVisualizedSearchResult = null;
+    let activeVizHitRank = null;
 
     const moduleConfig = {
       "easy-search": {
@@ -553,8 +734,6 @@
       syncDiscoveredDatabaseSelection();
       syncSelectedDatabaseToPayload();
     }
-
-    /*
 
     function getSearchModeLabel(mode) {
       return mode === "easy-multimersearch" ? "多聚体搜索" : "单体搜索";
@@ -720,174 +899,359 @@
         previous_best_target: bestTarget,
         latest_best_target: bestTarget,
       };
+      renderSearchVisualization(result);
     }
 
-    */
-
-    function getSearchModeLabel(mode) {
-      return mode === "easy-multimersearch" ? "Multimer Search" : "Monomer Search";
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#39;");
     }
 
-    function updateSearchModeButtons() {
-      for (const button of searchModeButtons) {
-        button.classList.toggle("active", button.dataset.searchMode === currentSearchMode);
-      }
+    function truncateLabel(value, maxLength = 24) {
+      const text = String(value ?? "");
+      return text.length > maxLength ? `${text.slice(0, maxLength - 3)}...` : text;
     }
 
-    function toggleSearchFilterFields() {
-      const showMonomerFilters = currentSearchMode === "easy-search";
-      searchFilterTmRow.classList.toggle("hidden", !showMonomerFilters);
-      searchFilterEvalueRow.classList.toggle("hidden", !showMonomerFilters);
-      searchFilterProbRow.classList.toggle("hidden", !showMonomerFilters);
-      searchMinTmScore.disabled = !showMonomerFilters;
-      searchMaxEvalue.disabled = !showMonomerFilters;
-      searchMinProb.disabled = !showMonomerFilters;
+    function toFiniteNumber(value) {
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? numeric : null;
     }
 
-    function renderSearchLaunchHint() {
-      const summary = [
-        `Preset: ${getSearchModeLabel(currentSearchMode)}`,
-        `database=${getSelectedDatabase() || "unset"}`,
-        `topk=${searchTopk.value || 5}`,
-        `query=${searchQueryPath.value.trim() || "pending"}`,
-      ];
-      if (searchTmpDir.value.trim()) {
-        summary.push(`tmp_dir=${searchTmpDir.value.trim()}`);
-      }
-      if (searchOutputPath.value.trim()) {
-        summary.push(`output=${searchOutputPath.value.trim()}`);
-      }
-      if (currentSearchMode === "easy-search") {
-        if (searchMinTmScore.value.trim()) {
-          summary.push(`min_tmscore=${searchMinTmScore.value.trim()}`);
-        }
-        if (searchMaxEvalue.value.trim()) {
-          summary.push(`max_evalue=${searchMaxEvalue.value.trim()}`);
-        }
-        if (searchMinProb.value.trim()) {
-          summary.push(`min_prob=${searchMinProb.value.trim()}`);
-        }
-      }
-      searchLaunchHint.textContent = summary.join(" | ");
-    }
-
-    function setSearchMode(mode) {
-      currentSearchMode = mode === "easy-multimersearch" ? "easy-multimersearch" : "easy-search";
-      updateSearchModeButtons();
-      toggleSearchFilterFields();
-      renderSearchLaunchHint();
-    }
-
-    function parseOptionalNumber(value, fieldLabel) {
-      const raw = String(value || "").trim();
-      if (!raw) {
+    function median(values) {
+      if (!values.length) {
         return null;
       }
-      const parsed = Number(raw);
-      if (!Number.isFinite(parsed)) {
-        throw new Error(`${fieldLabel} is not a valid number.`);
-      }
-      return parsed;
+      const ordered = [...values].sort((a, b) => a - b);
+      const middle = Math.floor(ordered.length / 2);
+      return ordered.length % 2
+        ? ordered[middle]
+        : (ordered[middle - 1] + ordered[middle]) / 2;
     }
 
-    function buildSearchLauncherPayload() {
-      const pdbPath = searchQueryPath.value.trim();
-      if (!pdbPath) {
-        throw new Error("Please provide a query structure path or use the latest uploaded file.");
+    function getSearchMetricSpec(result) {
+      if (result?.module === "easy-multimersearch") {
+        return { key: "complexqtmscore", label: "complexqTM", color: "#b04d2f" };
       }
-
-      const database = getSelectedDatabase();
-      if (!database) {
-        throw new Error("Please choose a search database first.");
-      }
-
-      const topk = Number.parseInt(String(searchTopk.value || "").trim(), 10);
-      if (!Number.isInteger(topk) || topk < 1 || topk > 200) {
-        throw new Error("TopK must be an integer between 1 and 200.");
-      }
-
-      const payload = {
-        pdb_path: pdbPath,
-        database,
-        topk,
-      };
-
-      if (searchTmpDir.value.trim()) {
-        payload.tmp_dir = searchTmpDir.value.trim();
-      }
-      if (searchOutputPath.value.trim()) {
-        payload.output_path = searchOutputPath.value.trim();
-      }
-
-      if (currentSearchMode === "easy-search") {
-        const minTmScore = parseOptionalNumber(searchMinTmScore.value, "min_tmscore");
-        const maxEvalue = parseOptionalNumber(searchMaxEvalue.value, "max_evalue");
-        const minProb = parseOptionalNumber(searchMinProb.value, "min_prob");
-        if (minTmScore !== null) {
-          payload.min_tmscore = minTmScore;
-        }
-        if (maxEvalue !== null) {
-          payload.max_evalue = maxEvalue;
-        }
-        if (minProb !== null) {
-          payload.min_prob = minProb;
-        }
-      }
-
-      return payload;
+      return { key: "tmscore", label: "TM-score", color: "#1d6b57" };
     }
 
-    function buildSearchLauncherPrompt(payload) {
+    function isVisualizableSearchResult(result) {
+      return result?.module === "easy-search" || result?.module === "easy-multimersearch";
+    }
+
+    function formatMetricValue(value) {
+      const numeric = toFiniteNumber(value);
+      return numeric === null ? "-" : numeric.toFixed(4);
+    }
+
+    function setSearchVizEmpty(message) {
+      latestVisualizedSearchResult = null;
+      activeVizHitRank = null;
+      searchVizStats.innerHTML = "";
+      searchVizDistributionTitle.textContent = "分数分布";
+      searchVizRankingTitle.textContent = "Top 命中排名";
+      searchVizScatterTitle.textContent = "TM-score / complexqTM vs prob";
+      searchVizDetailsTitle.textContent = "Top 命中详情";
+      searchVizDistribution.innerHTML = "";
+      searchVizDistribution.setAttribute("viewBox", "0 0 360 220");
+      searchVizRanking.innerHTML = "";
+      searchVizRanking.setAttribute("viewBox", "0 0 360 260");
+      searchVizScatter.innerHTML = "";
+      searchVizScatter.setAttribute("viewBox", "0 0 360 240");
+      searchVizDetails.innerHTML = "";
+      searchVizNote.textContent = message;
+    }
+
+    function renderSearchVizStats(result, metricSpec, metricValues) {
+      const summary = result?.summary || {};
+      const request = result?.request || {};
+      const hits = Array.isArray(result?.hits) ? result.hits : [];
+      const bestHit = hits[0] || {};
       const items = [
-        `Run ${currentSearchMode}`,
-        `pdb_path=${payload.pdb_path}`,
-        `database=${payload.database}`,
-        `topk=${payload.topk}`,
+        { label: "模块", value: result?.module || "-" },
+        { label: "最佳命中", value: summary.best_target || bestHit.target || "-" },
+        { label: "命中数", value: summary.count ?? hits.length ?? 0 },
+        { label: "数据库", value: request.database || "-" },
+        { label: `最佳 ${metricSpec.label}`, value: formatMetricValue(bestHit[metricSpec.key]) },
+        { label: `中位 ${metricSpec.label}`, value: formatMetricValue(median(metricValues)) },
+        { label: "TopK", value: request.topk ?? "-" },
       ];
-      if (payload.tmp_dir) {
-        items.push(`tmp_dir=${payload.tmp_dir}`);
-      }
-      if (payload.output_path) {
-        items.push(`output=${payload.output_path}`);
-      }
-      if (payload.min_tmscore !== undefined) {
-        items.push(`min_tmscore=${payload.min_tmscore}`);
-      }
-      if (payload.max_evalue !== undefined) {
-        items.push(`max_evalue=${payload.max_evalue}`);
-      }
-      if (payload.min_prob !== undefined) {
-        items.push(`min_prob=${payload.min_prob}`);
-      }
-      return items.join(", ");
+      searchVizStats.innerHTML = items.map((item) => (
+        `<div class="viz-stat"><strong>${escapeHtml(item.label)}</strong><span>${escapeHtml(item.value)}</span></div>`
+      )).join("");
     }
 
-    function applyStructuredSearchResult(result) {
-      const bestHit = Array.isArray(result?.hits) && result.hits.length ? result.hits[0] : null;
-      let reply;
-      if (currentSearchMode === "easy-multimersearch") {
-        reply = bestHit
-          ? `Preset multimer search finished. Best hit: ${bestHit.target}. complexqTM=${Number(bestHit.complexqtmscore || 0).toFixed(4)}, prob=${Number(bestHit.prob || 0).toFixed(4)}.`
-          : "Preset multimer search finished, but no hits were retained.";
+    function renderHistogramSvg(values, metricSpec) {
+      const width = 360;
+      const height = 220;
+      const padding = { top: 20, right: 12, bottom: 30, left: 34 };
+      const innerWidth = width - padding.left - padding.right;
+      const innerHeight = height - padding.top - padding.bottom;
+      const bins = 6;
+      const counts = Array.from({ length: bins }, () => 0);
+      for (const value of values) {
+        const clamped = Math.max(0, Math.min(0.999999, value));
+        const index = Math.min(bins - 1, Math.floor(clamped * bins));
+        counts[index] += 1;
+      }
+      const maxCount = Math.max(...counts, 1);
+      const barWidth = innerWidth / bins - 8;
+      const bars = counts.map((count, index) => {
+        const x = padding.left + index * (innerWidth / bins) + 4;
+        const barHeight = (count / maxCount) * (innerHeight - 18);
+        const y = padding.top + innerHeight - barHeight;
+        const binStart = (index / bins).toFixed(2);
+        const binEnd = ((index + 1) / bins).toFixed(2);
+        return `
+          <rect x="${x}" y="${y}" width="${barWidth}" height="${barHeight}" rx="8" fill="${metricSpec.color}" opacity="0.88"></rect>
+          <text x="${x + barWidth / 2}" y="${y - 6}" text-anchor="middle" font-size="11" fill="#5f6b5f">${count}</text>
+          <text x="${x + barWidth / 2}" y="${height - 10}" text-anchor="middle" font-size="10" fill="#5f6b5f">${binStart}-${binEnd}</text>
+        `;
+      }).join("");
+      return `
+        <rect x="0" y="0" width="${width}" height="${height}" rx="18" fill="rgba(255,255,255,0.02)"></rect>
+        <line x1="${padding.left}" y1="${padding.top + innerHeight}" x2="${width - padding.right}" y2="${padding.top + innerHeight}" stroke="rgba(31,42,31,0.18)"></line>
+        <line x1="${padding.left}" y1="${padding.top}" x2="${padding.left}" y2="${padding.top + innerHeight}" stroke="rgba(31,42,31,0.18)"></line>
+        ${bars}
+      `;
+    }
+
+    function renderRankingSvg(hits, metricSpec, activeRank = null) {
+      const rows = hits.slice(0, SEARCH_VIZ_RANKING_LIMIT);
+      const width = 360;
+      const rowHeight = 28;
+      const height = Math.max(220, 30 + rows.length * rowHeight);
+      const padding = { top: 18, right: 42, bottom: 16, left: 122 };
+      const innerWidth = width - padding.left - padding.right;
+      const values = rows.map((item) => toFiniteNumber(item[metricSpec.key]) || 0);
+      const maxValue = Math.max(...values, 1);
+      const labels = rows.map((item, index) => {
+        const rank = index + 1;
+        const y = padding.top + index * rowHeight + 16;
+        const value = values[index];
+        const barWidth = (value / maxValue) * innerWidth;
+        const isActive = rank === activeRank;
+        const trackFill = isActive ? "rgba(31,42,31,0.12)" : "rgba(31,42,31,0.06)";
+        const trackStroke = isActive ? metricSpec.color : "rgba(31,42,31,0)";
+        const valueColor = isActive ? "#1f2a1f" : "#5f6b5f";
+        const labelColor = isActive ? metricSpec.color : "#1f2a1f";
+        return `
+          <g
+            class="viz-rank-row"
+            data-hit-rank="${rank}"
+            tabindex="0"
+            role="button"
+            aria-label="${escapeHtml(`定位第 ${rank} 个命中 ${item.target}`)}">
+            <text x="10" y="${y}" font-size="11" font-weight="${isActive ? 700 : 500}" fill="${labelColor}">${escapeHtml(`${rank}. ${truncateLabel(item.target)}`)}</text>
+            <rect class="viz-rank-track" x="${padding.left}" y="${y - 12}" width="${innerWidth}" height="16" rx="8" fill="${trackFill}" stroke="${trackStroke}" stroke-width="${isActive ? 1.4 : 0}"></rect>
+            <rect x="${padding.left}" y="${y - 12}" width="${barWidth}" height="16" rx="8" fill="${metricSpec.color}" opacity="${isActive ? 1 : 0.88}"></rect>
+            <text x="${width - 8}" y="${y}" text-anchor="end" font-size="11" font-weight="${isActive ? 700 : 500}" fill="${valueColor}">${value.toFixed(3)}</text>
+            <title>${escapeHtml(`#${rank} ${item.target} | ${metricSpec.label}=${value.toFixed(4)}`)}</title>
+          </g>
+        `;
+      }).join("");
+      return `
+        <rect x="0" y="0" width="${width}" height="${height}" rx="18" fill="rgba(255,255,255,0.02)"></rect>
+        ${labels}
+      `;
+    }
+
+    function renderScatterSvg(hits, metricSpec, activeRank = null) {
+      const width = 360;
+      const height = 240;
+      const padding = { top: 20, right: 20, bottom: 34, left: 38 };
+      const innerWidth = width - padding.left - padding.right;
+      const innerHeight = height - padding.top - padding.bottom;
+      const points = hits
+        .slice(0, SEARCH_VIZ_SCATTER_LIMIT)
+        .map((item, index) => ({
+          rank: index + 1,
+          target: item.target,
+          score: toFiniteNumber(item[metricSpec.key]),
+          prob: toFiniteNumber(item.prob),
+        }))
+        .filter((item) => item.score !== null && item.prob !== null);
+      if (!points.length) {
+        return "";
+      }
+
+      const circles = points.map((point) => {
+        const x = padding.left + point.score * innerWidth;
+        const y = padding.top + innerHeight - point.prob * innerHeight;
+        const isActive = point.rank === activeRank;
+        const radius = point.rank === 1 ? 6.5 : 5;
+        const opacity = point.rank <= 3 ? 0.95 : 0.72;
+        const stroke = isActive ? "#1f2a1f" : "rgba(255,255,255,0.9)";
+        const strokeWidth = isActive ? 2.5 : 1.2;
+        return `
+          <circle
+            class="viz-point"
+            data-hit-rank="${point.rank}"
+            tabindex="0"
+            role="button"
+            aria-label="${escapeHtml(`定位第 ${point.rank} 个命中 ${point.target}`)}"
+            cx="${x}"
+            cy="${y}"
+            r="${radius}"
+            fill="${metricSpec.color}"
+            opacity="${opacity}"
+            stroke="${stroke}"
+            stroke-width="${strokeWidth}">
+            <title>${escapeHtml(`#${point.rank} ${point.target} | ${metricSpec.label}=${point.score.toFixed(4)} | prob=${point.prob.toFixed(4)}`)}</title>
+          </circle>
+        `;
+      }).join("");
+
+      return `
+        <rect x="0" y="0" width="${width}" height="${height}" rx="18" fill="rgba(255,255,255,0.02)"></rect>
+        <line x1="${padding.left}" y1="${padding.top + innerHeight}" x2="${width - padding.right}" y2="${padding.top + innerHeight}" stroke="rgba(31,42,31,0.18)"></line>
+        <line x1="${padding.left}" y1="${padding.top}" x2="${padding.left}" y2="${padding.top + innerHeight}" stroke="rgba(31,42,31,0.18)"></line>
+        <text x="${width / 2}" y="${height - 8}" text-anchor="middle" font-size="11" fill="#5f6b5f">${metricSpec.label}</text>
+        <text x="14" y="${padding.top + innerHeight / 2}" text-anchor="middle" font-size="11" fill="#5f6b5f" transform="rotate(-90 14 ${padding.top + innerHeight / 2})">prob</text>
+        <text x="${padding.left}" y="${height - 18}" text-anchor="middle" font-size="10" fill="#5f6b5f">0.0</text>
+        <text x="${width - padding.right}" y="${height - 18}" text-anchor="middle" font-size="10" fill="#5f6b5f">1.0</text>
+        <text x="${padding.left - 8}" y="${padding.top + innerHeight}" text-anchor="end" font-size="10" fill="#5f6b5f">0.0</text>
+        <text x="${padding.left - 8}" y="${padding.top + 6}" text-anchor="end" font-size="10" fill="#5f6b5f">1.0</text>
+        ${circles}
+      `;
+    }
+
+    function renderHitDetails(hits, metricSpec, activeRank = 1) {
+      const rows = hits.slice(0, SEARCH_VIZ_DETAIL_LIMIT);
+      searchVizDetails.innerHTML = rows.map((item, index) => {
+        const rank = index + 1;
+        const isActive = rank === activeRank;
+        const score = formatMetricValue(item[metricSpec.key]);
+        const prob = formatMetricValue(item.prob);
+        const evalue = item.evalue ?? "-";
+        const extraLines = resultDetailsForHit(item, metricSpec);
+        return `
+          <details class="viz-detail ${isActive ? "is-active" : ""}" data-hit-rank="${rank}" ${isActive ? "open" : ""}>
+            <summary>#${rank} ${escapeHtml(item.target || "-")} | ${metricSpec.label}=${escapeHtml(score)}</summary>
+            <div class="viz-detail-body">
+              <div>prob: ${escapeHtml(prob)}</div>
+              <div>e-value: ${escapeHtml(evalue)}</div>
+              ${extraLines}
+            </div>
+          </details>
+        `;
+      }).join("");
+    }
+
+    function resultDetailsForHit(item, metricSpec) {
+      const lines = [];
+      if (metricSpec.key === "tmscore") {
+        if (toFiniteNumber(item.rmsd) !== null) {
+          lines.push(`<div>RMSD: ${escapeHtml(formatMetricValue(item.rmsd))}</div>`);
+        }
       } else {
-        reply = bestHit
-          ? `Preset monomer search finished. Best hit: ${bestHit.target}. TM-score=${Number(bestHit.tmscore || 0).toFixed(4)}, prob=${Number(bestHit.prob || 0).toFixed(4)}.`
-          : "Preset monomer search finished, but no hits were retained.";
+        if (toFiniteNumber(item.interfacelddt) !== null) {
+          lines.push(`<div>interfaceLDDT: ${escapeHtml(formatMetricValue(item.interfacelddt))}</div>`);
+        }
+        if (toFiniteNumber(item.qtmscore) !== null) {
+          lines.push(`<div>qTM: ${escapeHtml(formatMetricValue(item.qtmscore))}</div>`);
+        }
+        if (toFiniteNumber(item.ttmscore) !== null) {
+          lines.push(`<div>tTM: ${escapeHtml(formatMetricValue(item.ttmscore))}</div>`);
+        }
       }
-      if (result?.output_path) {
-        reply += `\nResult JSON: ${result.output_path}`;
+      if (item.query) {
+        lines.push(`<div>query: ${escapeHtml(item.query)}</div>`);
       }
-      addBubble("assistant", reply);
-      chatState.messages.push({ role: "assistant", content: reply });
-      const bestTarget = result?.summary?.best_target || bestHit?.target || "";
-      chatState.reasoningContext = {
-        version: 1,
-        chat_mode: "execution",
-        current_mode: currentSearchMode,
-        latest_result: result,
-        previous_best_target: bestTarget,
-        latest_best_target: bestTarget,
-      };
+      return lines.join("");
+    }
+
+    function getSearchVizActiveRank(hits) {
+      const limit = Math.min(hits.length, SEARCH_VIZ_DETAIL_LIMIT, SEARCH_VIZ_RANKING_LIMIT, SEARCH_VIZ_SCATTER_LIMIT);
+      if (!limit) {
+        return null;
+      }
+      if (Number.isInteger(activeVizHitRank) && activeVizHitRank >= 1 && activeVizHitRank <= limit) {
+        return activeVizHitRank;
+      }
+      return 1;
+    }
+
+    function getSearchVizRankFromNode(node) {
+      const target = node?.closest?.("[data-hit-rank]");
+      if (!target) {
+        return null;
+      }
+      const rank = Number.parseInt(target.getAttribute("data-hit-rank") || "", 10);
+      return Number.isInteger(rank) ? rank : null;
+    }
+
+    function focusSearchVizHit(rank) {
+      if (!latestVisualizedSearchResult || !Number.isInteger(rank)) {
+        return;
+      }
+      const hits = Array.isArray(latestVisualizedSearchResult?.hits) ? latestVisualizedSearchResult.hits : [];
+      const limit = Math.min(hits.length, SEARCH_VIZ_DETAIL_LIMIT, SEARCH_VIZ_RANKING_LIMIT, SEARCH_VIZ_SCATTER_LIMIT);
+      if (rank < 1 || rank > limit) {
+        return;
+      }
+
+      activeVizHitRank = rank;
+      const metricSpec = getSearchMetricSpec(latestVisualizedSearchResult);
+      searchVizRanking.innerHTML = renderRankingSvg(hits, metricSpec, activeVizHitRank);
+      searchVizScatter.innerHTML = renderScatterSvg(hits, metricSpec, activeVizHitRank);
+      renderHitDetails(hits, metricSpec, activeVizHitRank);
+
+      const detailNode = searchVizDetails.querySelector(`[data-hit-rank="${activeVizHitRank}"]`);
+      if (detailNode) {
+        detailNode.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      }
+    }
+
+    function renderSearchVisualization(result) {
+      if (!isVisualizableSearchResult(result)) {
+        latestVisualizedSearchResult = null;
+        activeVizHitRank = null;
+        return;
+      }
+
+      latestVisualizedSearchResult = result;
+      const hits = Array.isArray(result?.hits) ? result.hits : [];
+      const metricSpec = getSearchMetricSpec(result);
+      const metricValues = hits
+        .map((item) => toFiniteNumber(item?.[metricSpec.key]))
+        .filter((item) => item !== null);
+      activeVizHitRank = getSearchVizActiveRank(hits);
+
+      searchVizDistributionTitle.textContent = `${metricSpec.label} 分布`;
+      searchVizRankingTitle.textContent = hits.length ? `Top ${Math.min(hits.length, SEARCH_VIZ_RANKING_LIMIT)} 命中排名` : "Top 命中排名";
+      searchVizScatterTitle.textContent = `${metricSpec.label} vs prob`;
+      searchVizDetailsTitle.textContent = hits.length ? `Top ${Math.min(hits.length, SEARCH_VIZ_DETAIL_LIMIT)} 命中详情` : "Top 命中详情";
+
+      if (!hits.length || !metricValues.length) {
+        renderSearchVizStats(result, metricSpec, metricValues);
+        searchVizDistribution.innerHTML = "";
+        searchVizDistribution.setAttribute("viewBox", "0 0 360 220");
+        searchVizRanking.innerHTML = "";
+        searchVizRanking.setAttribute("viewBox", "0 0 360 260");
+        searchVizScatter.innerHTML = "";
+        searchVizScatter.setAttribute("viewBox", "0 0 360 240");
+        searchVizDetails.innerHTML = "";
+        searchVizNote.textContent = `${result?.module || "search"} 已执行，但当前没有命中通过筛选，暂时无法绘制图表。`;
+        return;
+      }
+
+      renderSearchVizStats(result, metricSpec, metricValues);
+      searchVizDistribution.innerHTML = renderHistogramSvg(metricValues, metricSpec);
+      searchVizRanking.setAttribute("viewBox", `0 0 360 ${Math.max(220, 30 + Math.min(hits.length, SEARCH_VIZ_RANKING_LIMIT) * 28)}`);
+      searchVizRanking.innerHTML = renderRankingSvg(hits, metricSpec, activeVizHitRank);
+      searchVizScatter.innerHTML = renderScatterSvg(hits, metricSpec, activeVizHitRank);
+      renderHitDetails(hits, metricSpec, activeVizHitRank);
+
+      const preview = hits.slice(0, 5).map((item, index) => {
+        const probability = toFiniteNumber(item.prob);
+        return `${index + 1}. ${item.target} | ${metricSpec.label}=${formatMetricValue(item[metricSpec.key])} | prob=${probability === null ? "-" : probability.toFixed(4)}`;
+      }).join("\n");
+      searchVizNote.textContent = `当前展示: ${result.module}\n点击散点、排名条或详情卡都可定位并高亮对应命中，悬停散点可查看 target 与数值。\n${preview}`;
     }
 
     function addBubble(role, content) {
@@ -1294,6 +1658,10 @@
         addBubble("assistant", reply);
         chatState.messages.push({ role: "assistant", content: reply });
         chatState.reasoningContext = payload.reasoning_context || null;
+        const visualResult = payload.operation_result || payload.reasoning_context?.latest_result || null;
+        if (visualResult) {
+          renderSearchVisualization(visualResult);
+        }
       } catch (error) {
         addBubble("assistant", `请求失败: ${error}`);
       } finally {
@@ -1319,6 +1687,7 @@
         });
         const data = await readJsonResponse(response);
         moduleResponse.textContent = JSON.stringify(data, null, 2);
+        renderSearchVisualization(data);
       } catch (error) {
         moduleResponse.textContent = `执行失败: ${error}`;
       } finally {
@@ -1337,6 +1706,7 @@
       chatState.reasoningContext = null;
       chatLog.innerHTML = "";
       addBubble("assistant", "上下文已清空。现在可以开始新的 Foldseek 工作流。");
+      setSearchVizEmpty("完成 easy-search 或 easy-multimersearch 后，这里会自动显示图表和详情卡。");
     });
 
     uploadSend.addEventListener("click", uploadFile);
@@ -1345,6 +1715,53 @@
     searchUseUpload.addEventListener("click", useLatestUploadForSearch);
     searchFillChat.addEventListener("click", fillSearchPromptIntoChat);
     searchRun.addEventListener("click", runStructuredSearch);
+    searchVizScatter.addEventListener("click", (event) => {
+      const rank = getSearchVizRankFromNode(event.target);
+      if (rank === null) {
+        return;
+      }
+      focusSearchVizHit(rank);
+    });
+    searchVizRanking.addEventListener("click", (event) => {
+      const rank = getSearchVizRankFromNode(event.target);
+      if (rank === null) {
+        return;
+      }
+      focusSearchVizHit(rank);
+    });
+    searchVizScatter.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") {
+        return;
+      }
+      const rank = getSearchVizRankFromNode(event.target);
+      if (rank === null) {
+        return;
+      }
+      event.preventDefault();
+      focusSearchVizHit(rank);
+    });
+    searchVizRanking.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") {
+        return;
+      }
+      const rank = getSearchVizRankFromNode(event.target);
+      if (rank === null) {
+        return;
+      }
+      event.preventDefault();
+      focusSearchVizHit(rank);
+    });
+    searchVizDetails.addEventListener("click", (event) => {
+      const summary = event.target.closest("summary");
+      if (!summary) {
+        return;
+      }
+      const rank = getSearchVizRankFromNode(summary);
+      if (rank === null) {
+        return;
+      }
+      requestAnimationFrame(() => focusSearchVizHit(rank));
+    });
     for (const button of searchModeButtons) {
       button.addEventListener("click", () => setSearchMode(button.dataset.searchMode));
     }
@@ -1386,6 +1803,7 @@
     renderDatabaseControls({ available_databases: ["afdb50"], default_database: "afdb50", database_scan_roots: [] });
     renderUploadInfo(null);
     renderSearchLaunchHint();
+    setSearchVizEmpty("完成 easy-search 或 easy-multimersearch 后，这里会自动显示图表和详情卡。");
     addBubble("assistant", "工作台已就绪。先上传文件，再用自然语言或模块面板执行 Foldseek 操作会更顺手。");
     loadStatus().catch((error) => {
       addBubble("assistant", `初始化失败: ${error}`);
